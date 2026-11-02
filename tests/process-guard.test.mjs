@@ -1,7 +1,7 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +12,7 @@ const {
   killProcessTree, setProcessTableReader, setProcAvailable, setChildTempWatchStart, sweepChromiumTemps,
   trackChildGroup, untrackChildGroup, trackUnverifiedApply, cleanupChildrenAndOutputs,
   watchChildGroup, trackedChildPids, setPlatformForTest, setTaskkillRunner,
+  removeOutputDir, trackedOutputDirs, trackOutputDir, untrackOutputDir, signalExitCode, STOP_SIGNALS,
 } = await import(path.join(repoRoot, 'dist', 'process-guard.js'));
 
 /**
@@ -464,6 +465,111 @@ test('every child spawn hides its window on Windows and stops through killProces
   assert.match(config, /windowsHide: true/, 'the config loader child is hidden on Windows');
   const selenium = fs.readFileSync(path.join(repoRoot, 'src/adapters/selenium-js/spawn.ts'), 'utf8');
   assert.match(selenium, /process\.platform === 'win32' \? 'junction' : 'dir'/, 'node_modules is linked with a junction on Windows');
+});
+
+/**
+ * On Windows a Ctrl+C left a heal output folder (a trace, a network log,
+ * screenshots) behind, because a browser that was just stopped still held
+ * its files and the single delete failed. The delete now retries, and a
+ * folder that is still locked is tried again when heal exits.
+ */
+function outputLike() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-core-heal-out-'));
+  const trace = path.join(root, 'first', 'cart-chromium');
+  fs.mkdirSync(trace, { recursive: true });
+  fs.writeFileSync(path.join(trace, 'trace.zip'), Buffer.alloc(1024, 1));
+  return root;
+}
+
+test('an output folder is removed with retries for Windows file locks', () => {
+  const dir = outputLike();
+  trackOutputDir(dir);
+  let seen;
+  try {
+    assert.equal(removeOutputDir(dir, (target, options) => { seen = options; fs.rmSync(target, options); }), true);
+    assert.equal(fs.existsSync(dir), false);
+    assert.equal(seen.recursive, true);
+    assert.equal(seen.force, true);
+    assert.ok(seen.maxRetries >= 5, JSON.stringify(seen));
+    assert.ok(seen.retryDelay >= 50, JSON.stringify(seen));
+    assert.equal(trackedOutputDirs().includes(dir), false);
+  } finally {
+    untrackOutputDir(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a locked output folder stays tracked and the exit cleanup removes it', () => {
+  const dir = outputLike();
+  trackOutputDir(dir);
+  const busy = () => { throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }); };
+  try {
+    assert.equal(removeOutputDir(dir, busy), false, 'a locked delete does not throw');
+    assert.equal(fs.existsSync(dir), true);
+    assert.equal(trackedOutputDirs().includes(dir), true, 'still tracked for the exit cleanup');
+    cleanupChildrenAndOutputs();
+    assert.equal(fs.existsSync(dir), false);
+    assert.equal(trackedOutputDirs().includes(dir), false);
+  } finally {
+    untrackOutputDir(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('Ctrl+Break (SIGBREAK) is trapped like Ctrl+C and exits 130', () => {
+  assert.deepEqual([...STOP_SIGNALS], ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']);
+  assert.equal(signalExitCode('SIGINT'), 130);
+  assert.equal(signalExitCode('SIGBREAK'), 130);
+  assert.equal(signalExitCode('SIGTERM'), 143);
+  assert.equal(signalExitCode('SIGHUP'), 129);
+  const code = `
+    import { installSignalCleanup } from './dist/process-guard.js';
+    const before = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK', 'exit'].map((s) => process.listenerCount(s));
+    installSignalCleanup();
+    installSignalCleanup();
+    const after = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK', 'exit'].map((s) => process.listenerCount(s));
+    process.stdout.write(JSON.stringify({ before, after }));
+  `;
+  const out = spawnSync(process.execPath, ['--input-type=module', '-e', code], { cwd: repoRoot, encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
+  const { before, after } = JSON.parse(out.stdout);
+  assert.deepEqual(after.map((n, i) => n - before[i]), [1, 1, 1, 1, 1]);
+});
+
+test('Ctrl+C on a run removes a tracked output folder whose files a child still writes', { skip: POSIX_SKIP }, async () => {
+  const dir = outputLike();
+  const code = `
+    import { spawn } from 'node:child_process';
+    import { installSignalCleanup, trackOutputDir, watchChildGroup } from './dist/process-guard.js';
+    installSignalCleanup();
+    trackOutputDir(process.env.OUT_DIR);
+    const writer = spawn(process.execPath, ['-e', 'const fs=require("node:fs");const p=require("node:path");const d=p.join(process.argv[1],"first","live");let n=0;setInterval(()=>{try{fs.mkdirSync(d,{recursive:true});fs.writeFileSync(p.join(d,"f"+(n++%20)),"x");}catch{}},10);', process.env.OUT_DIR], { stdio: 'ignore', detached: process.platform !== 'win32' });
+    watchChildGroup(writer);
+    setTimeout(() => process.stdout.write('ready ' + writer.pid + '\\n'), 200);
+    setInterval(() => {}, 1000);
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', code], { cwd: repoRoot, env: { ...process.env, OUT_DIR: dir } });
+  let out = '';
+  child.stdout.on('data', (d) => { out += d; });
+  let writerPid = 0;
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`no ready: ${out}`)), 5000);
+      child.stdout.on('data', () => {
+        const m = out.match(/ready (\d+)/);
+        if (m) { writerPid = Number(m[1]); clearTimeout(timer); resolve(); }
+      });
+    });
+    process.kill(child.pid, 'SIGINT');
+    const status = await new Promise((resolve) => child.on('exit', (c) => resolve(c)));
+    assert.equal(status, 130);
+    assert.equal(alive(writerPid), false, 'the writer was stopped');
+    assert.equal(fs.existsSync(dir), false, dir);
+  } finally {
+    if (child.exitCode === null) { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
+    if (writerPid) stop(writerPid);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 });

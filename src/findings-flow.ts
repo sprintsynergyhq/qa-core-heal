@@ -14,7 +14,7 @@ import {
 import { activeAdapter } from './adapters/index.js';
 import { projectRootFor } from './project-root.js';
 import { startRunBudget } from './playwright-cli.js';
-import { clearUnverifiedApplies, trackOutputDir, trackUnverifiedApply, untrackOutputDir } from './process-guard.js';
+import { clearUnverifiedApplies, removeOutputDir, trackOutputDir, trackUnverifiedApply } from './process-guard.js';
 import { scratchVerify } from './scratch.js';
 import {
   matchFinding, realPathOf, resolveTarget, type RunObserver,
@@ -499,8 +499,8 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     try {
       return await processOne(f, outRoot);
     } finally {
-      fs.rmSync(outRoot, { recursive: true, force: true });
-      untrackOutputDir(outRoot);
+      // Retries Windows file locks. A folder that is still locked stays tracked for the exit cleanup.
+      removeOutputDir(outRoot);
     }
   }
 

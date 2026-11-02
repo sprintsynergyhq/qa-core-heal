@@ -535,26 +535,56 @@ export function watchChildGroup(child: { pid?: number; on(event: string, listene
   child.on('error', drop);
 }
 
+/**
+ * Retries for removing an output folder. On Windows a browser or test
+ * worker that was just stopped can hold its files for a moment, so the
+ * first delete can fail with EBUSY or EPERM. Node waits 100 ms more on each
+ * try, about 5.5 seconds in total.
+ */
+export const OUTPUT_REMOVE_RETRIES = { maxRetries: 10, retryDelay: 100 } as const;
+
+/**
+ * Remove an output folder with retries for Windows file locks. Never throws.
+ * A folder that is gone is no longer tracked. A folder that is still there
+ * stays tracked, so the exit cleanup tries it again. Returns true when it is gone.
+ * A test can pass its own `rm`.
+ */
+export function removeOutputDir(dir: string, rm: typeof fs.rmSync = fs.rmSync): boolean {
+  try { rm(dir, { recursive: true, force: true, ...OUTPUT_REMOVE_RETRIES }); } catch { /* checked below */ }
+  let gone: boolean;
+  try { gone = !fs.existsSync(dir); } catch { gone = false; }
+  if (gone) outputDirs.delete(dir);
+  else outputDirs.add(dir);
+  return gone;
+}
+
+/** Output folders still tracked. Tests use this to see that a locked folder is kept for the exit cleanup. */
+export function trackedOutputDirs(): string[] {
+  return [...outputDirs];
+}
+
 /** Restore unverified edits, kill every tracked Playwright process group, and remove tracked output folders. */
 export function cleanupChildrenAndOutputs(): void {
   restoreUnverifiedApplies();
   for (const pid of childGroups) killProcessTree(pid);
   childGroups.clear();
   tempWatches.clear();
-  for (const dir of outputDirs) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* already gone */ }
-  }
-  outputDirs.clear();
+  // A folder that is still locked stays tracked, so the exit cleanup tries it once more.
+  for (const dir of [...outputDirs]) removeOutputDir(dir);
   removeEmptyCreatedQaCore();
 }
 
-function signalExitCode(sig: NodeJS.Signals): number {
-  if (sig === 'SIGINT') return 130;
+/** Signals heal stops on. On Windows, Ctrl+Break is SIGBREAK and closing the console window is SIGHUP. */
+export const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const;
+
+/** Exit status after a stop signal. Ctrl+C and Ctrl+Break both exit 130. */
+export function signalExitCode(sig: NodeJS.Signals): number {
+  if (sig === 'SIGINT' || sig === 'SIGBREAK') return 130;
   if (sig === 'SIGHUP') return 129;
   return 143;
 }
 
-/** Install the SIGINT, SIGTERM, and SIGHUP traps once. A normal exit also drops leftovers. */
+/** Install the SIGINT, SIGTERM, SIGHUP, and SIGBREAK traps once. A normal exit also drops leftovers. */
 export function installSignalCleanup(): void {
   if (!exitInstalled) {
     exitInstalled = true;
@@ -566,7 +596,5 @@ export function installSignalCleanup(): void {
     cleanupChildrenAndOutputs();
     process.exit(signalExitCode(sig));
   };
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
-  process.on('SIGHUP', onSignal);
+  for (const sig of STOP_SIGNALS) process.on(sig, onSignal);
 }
