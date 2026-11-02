@@ -35,6 +35,51 @@ const CHROMIUM_TEMP_PREFIX = '.org.chromium.Chromium.';
 
 const HAS_PROC = fs.existsSync('/proc');
 
+/** How long to wait for `taskkill` on Windows before giving up on it. */
+const TASKKILL_TIMEOUT_MS = 10_000;
+
+/** A test sets this to run the Windows path on another host. Null uses the real platform. */
+let platformForced: NodeJS.Platform | null = null;
+
+export function setPlatformForTest(value: NodeJS.Platform | null): void {
+  platformForced = value;
+}
+
+function onWindows(): boolean {
+  return (platformForced ?? process.platform) === 'win32';
+}
+
+/** Runs `taskkill`. A test injects a fake so no real process is touched. */
+export type TaskkillRunner = (command: string, args: string[], options: { stdio: 'ignore'; windowsHide: true; timeout: number }) => { error?: Error; status: number | null };
+
+let taskkillRunner: TaskkillRunner | null = null;
+
+export function setTaskkillRunner(runner: TaskkillRunner | null): void {
+  taskkillRunner = runner;
+}
+
+/**
+ * Stop a process and every process it started on Windows, and wait until
+ * `taskkill` is done. `/T` stops the whole tree and `/F` forces it. Windows
+ * has no process groups, so killing only the direct child would leave the
+ * Playwright workers and the browsers running. When `taskkill` cannot start,
+ * the direct child is still killed.
+ */
+function taskkillTree(pid: number): void {
+  const args = ['/T', '/F', '/PID', String(pid)];
+  const options = { stdio: 'ignore', windowsHide: true, timeout: TASKKILL_TIMEOUT_MS } as const;
+  let failed = false;
+  try {
+    const run = taskkillRunner ? taskkillRunner('taskkill', args, options) : spawnSync('taskkill', args, options);
+    failed = Boolean(run.error);
+  } catch {
+    failed = true;
+  }
+  if (failed) {
+    try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+  }
+}
+
 /** A test injects this to hide /proc. Null means that source has no table. */
 let tableReader: (() => ProcessRow[] | null) | null = null;
 
@@ -227,12 +272,14 @@ function treeOf(pid: number, rows: ProcessRow[]): TreeStop {
  * SIGTERM goes out first. After a short wait, the process table is read
  * again so a process that started after the first snapshot is included in
  * the final SIGKILL. Groups that are already dead are not signaled.
+ * On Windows there are no process groups, so `taskkill /T /F` stops the
+ * child and everything it started, and the call waits for it.
  */
 export function killProcessTree(pid: number): void {
   try {
     if (!Number.isInteger(pid) || pid <= 1) return;
-    if (process.platform === 'win32') {
-      try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+    if (onWindows()) {
+      taskkillTree(pid);
       return;
     }
     const rows = loadProcessTable();
@@ -476,14 +523,44 @@ export function trackedChildPids(): number[] {
  * Track a Playwright child until it exits. 'exit' fires when the process
  * is gone. 'close' waits for the pipes as well, and the pid can be reused
  * in that gap, so the group is dropped on 'exit' (and on 'error').
+ * On Windows the child is tracked as well, so a signal to heal stops the
+ * child tree with `taskkill` before the output folders are removed.
  */
 export function watchChildGroup(child: { pid?: number; on(event: string, listener: () => void): void }): void {
   const pid = child.pid;
-  if (!pid || process.platform === 'win32') return;
+  if (!pid) return;
   trackChildGroup(pid);
   const drop = (): void => { untrackChildGroup(pid); };
   child.on('exit', drop);
   child.on('error', drop);
+}
+
+/**
+ * Retries for removing an output folder. On Windows a browser or test
+ * worker that was just stopped can hold its files for a moment, so the
+ * first delete can fail with EBUSY or EPERM. Node waits 100 ms more on each
+ * try, about 5.5 seconds in total.
+ */
+export const OUTPUT_REMOVE_RETRIES = { maxRetries: 10, retryDelay: 100 } as const;
+
+/**
+ * Remove an output folder with retries for Windows file locks. Never throws.
+ * A folder that is gone is no longer tracked. A folder that is still there
+ * stays tracked, so the exit cleanup tries it again. Returns true when it is gone.
+ * A test can pass its own `rm`.
+ */
+export function removeOutputDir(dir: string, rm: typeof fs.rmSync = fs.rmSync): boolean {
+  try { rm(dir, { recursive: true, force: true, ...OUTPUT_REMOVE_RETRIES }); } catch { /* checked below */ }
+  let gone: boolean;
+  try { gone = !fs.existsSync(dir); } catch { gone = false; }
+  if (gone) outputDirs.delete(dir);
+  else outputDirs.add(dir);
+  return gone;
+}
+
+/** Output folders still tracked. Tests use this to see that a locked folder is kept for the exit cleanup. */
+export function trackedOutputDirs(): string[] {
+  return [...outputDirs];
 }
 
 /** Restore unverified edits, kill every tracked Playwright process group, and remove tracked output folders. */
@@ -492,20 +569,22 @@ export function cleanupChildrenAndOutputs(): void {
   for (const pid of childGroups) killProcessTree(pid);
   childGroups.clear();
   tempWatches.clear();
-  for (const dir of outputDirs) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* already gone */ }
-  }
-  outputDirs.clear();
+  // A folder that is still locked stays tracked, so the exit cleanup tries it once more.
+  for (const dir of [...outputDirs]) removeOutputDir(dir);
   removeEmptyCreatedQaCore();
 }
 
-function signalExitCode(sig: NodeJS.Signals): number {
-  if (sig === 'SIGINT') return 130;
+/** Signals heal stops on. On Windows, Ctrl+Break is SIGBREAK and closing the console window is SIGHUP. */
+export const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const;
+
+/** Exit status after a stop signal. Ctrl+C and Ctrl+Break both exit 130. */
+export function signalExitCode(sig: NodeJS.Signals): number {
+  if (sig === 'SIGINT' || sig === 'SIGBREAK') return 130;
   if (sig === 'SIGHUP') return 129;
   return 143;
 }
 
-/** Install the SIGINT, SIGTERM, and SIGHUP traps once. A normal exit also drops leftovers. */
+/** Install the SIGINT, SIGTERM, SIGHUP, and SIGBREAK traps once. A normal exit also drops leftovers. */
 export function installSignalCleanup(): void {
   if (!exitInstalled) {
     exitInstalled = true;
@@ -517,7 +596,5 @@ export function installSignalCleanup(): void {
     cleanupChildrenAndOutputs();
     process.exit(signalExitCode(sig));
   };
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
-  process.on('SIGHUP', onSignal);
+  for (const sig of STOP_SIGNALS) process.on(sig, onSignal);
 }

@@ -10,7 +10,7 @@ import { loadConfig } from './config.js';
 import { appendAuditLog, type AuditEntry } from './audit.js';
 import { parseConsent } from './run.js';
 import { startRunBudget } from './playwright-cli.js';
-import { clearUnverifiedApplies, installSignalCleanup, trackOutputDir, trackUnverifiedApply, untrackOutputDir } from './process-guard.js';
+import { clearUnverifiedApplies, installSignalCleanup, removeOutputDir, trackOutputDir, trackUnverifiedApply } from './process-guard.js';
 import { projectRootFor } from './project-root.js';
 import { detectFramework } from './adapters/detect.js';
 import { activeAdapter, enabledAdapters, FRAMEWORK_IDS } from './adapters/index.js';
@@ -565,9 +565,8 @@ function specOutputDir(name: string): string {
 }
 
 function endSpecOutput(dir: string): void {
-  const root = path.dirname(dir);
-  fs.rmSync(root, { recursive: true, force: true });
-  untrackOutputDir(root);
+  // Retries Windows file locks. A folder that is still locked stays tracked for the exit cleanup.
+  removeOutputDir(path.dirname(dir));
 }
 
 /** Remember files --apply wrote, so a signal during verify can put them back. */
