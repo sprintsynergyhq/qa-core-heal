@@ -45,6 +45,16 @@ function alive(pid) {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+/** True once `pid` is gone. A killed orphan can show as alive until init reaps it, so poll for a short time. */
+async function goneWithin(pid, ms) {
+  const end = Date.now() + ms;
+  while (alive(pid)) {
+    if (Date.now() > end) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return true;
+}
+
 function stop(pid) {
   try { process.kill(-pid, 'SIGKILL'); } catch { /* not a group leader */ }
   try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
@@ -563,7 +573,7 @@ test('Ctrl+C on a run removes a tracked output folder whose files a child still 
     process.kill(child.pid, 'SIGINT');
     const status = await new Promise((resolve) => child.on('exit', (c) => resolve(c)));
     assert.equal(status, 130);
-    assert.equal(alive(writerPid), false, 'the writer was stopped');
+    assert.equal(await goneWithin(writerPid, 2000), true, 'the writer was stopped');
     assert.equal(fs.existsSync(dir), false, dir);
   } finally {
     if (child.exitCode === null) { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
