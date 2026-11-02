@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.2 (2026-10-30)
+## 0.7.2 (2026-11-02)
 
 A Windows fix and test release. The healing engine, the CLI flags, the exit codes, and contract version 1 are unchanged. Behavior on macOS and Linux is unchanged.
 
@@ -10,12 +10,13 @@ A Windows fix and test release. The healing engine, the CLI flags, the exit code
 - **Fixed:** On Windows, every child process heal starts is started with its window hidden, so no extra console window opens when heal runs without a console of its own.
 - **Fixed:** On Windows, a Selenium heal links the project's `node_modules` into the scratch copy with a junction. A junction needs no administrator rights or Developer Mode.
 - **Fixed:** The `author` block in `package.json` uses the same 2-space indent as the rest of the file.
+- **Changed:** The copyright holder in `LICENSE` is now SprintSynergy, the same as the package author.
 - **Tests:** The tests that read the Linux `/proc` process table are skipped on macOS and Windows with a clear reason instead of failing. They still run in CI on Linux.
 - **Tests:** The process guard tests that use POSIX process groups and signals are skipped on Windows with a clear reason.
 - **Tests:** New tests force the Windows path with a fake `taskkill` and check the exact arguments, the hidden window, the fallback when `taskkill` cannot start, and the cleanup of tracked children after a signal.
 - **Tests:** New tests cover the delete retries, a locked output folder that the exit cleanup removes, the `SIGBREAK` trap, and a Ctrl+C that removes an output folder while a child still writes to it.
 - **Tests:** The version checks and the README wording checks now expect 0.7.2.
-- **Docs:** The README explains how heal stops child runs on Windows.
+- **Docs:** The README explains how heal stops child runs on Windows, and that `$LASTEXITCODE` shows 1 after Ctrl+C when `npx` runs through `npx.ps1` in Windows PowerShell.
 - **Docs:** The `capabilities --json` example in the README shows version 0.7.2.
 
 ## 0.7.1 (2026-10-30)
