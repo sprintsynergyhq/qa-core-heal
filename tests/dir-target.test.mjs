@@ -155,6 +155,15 @@ test('x', async ({ page }) => {
     assert.match(r.stdout, /scanned 2 locator\(s\) across 2 file\(s\)/);
     assert.match(r.stdout, /1 locator\(s\) skipped due to file errors/);
     assert.doesNotMatch(r.stdout + r.stderr, /^EACCES/m); // never the bare shape
+    // The console copy of Node's message hides the temp folder's full path (review of PR 15).
+    assert.ok(!r.stderr.includes(dir), r.stderr);
+    assert.match(r.stderr, /EACCES: permission denied, open 'tests[\/\\]b\.spec\.ts'/);
+    // The JSON keeps the full message and path.
+    const j = await runCli(['tests', '--scan', '--dry-run', '--json'], dir);
+    const doc = JSON.parse(j.stdout);
+    assert.equal(doc.fileErrors.length, 1);
+    assert.ok(doc.fileErrors[0].message.includes(path.join(dir, 'tests', 'b.spec.ts')), doc.fileErrors[0].message);
+    assert.ok(!j.stderr.includes(dir), j.stderr);
   } finally {
     fs.chmodSync(path.join(dir, 'tests/b.spec.ts'), 0o644);
     server.close();

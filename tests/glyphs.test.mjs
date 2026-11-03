@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { toAsciiGlyphs, useAsciiGlyphs } from '../dist/glyphs.js';
 
 /**
- * Abdul, 2026-11-03: ▸ and · show as garbled text in the Windows
+ * Windows tester report, 2026-11-03: ▸ and · show as garbled text in the Windows
  * PowerShell 5.1 console. The human report falls back to plain ASCII.
  */
 

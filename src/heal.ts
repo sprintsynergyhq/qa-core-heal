@@ -14,7 +14,7 @@ import { applyQuoteStyle } from './quotes.js';
 import { kindsFromTokens, kindsFromTrailingApi, kindOfElement, kindConflict, type ElementKind } from './kind.js';
 import { matchFuzzy, isGeneratedIdentifier, type FuzzyCandidate } from './fuzzy.js';
 import { loadAuthSetup, withTimeout } from './auth-setup.js';
-import { displayPath } from './display-path.js';
+import { displayMessage, displayPath } from './display-path.js';
 
 /**
  * Standalone selector healing for an existing Playwright spec.
@@ -1483,8 +1483,9 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
   const relSpec = (p: string): string => path.relative(process.cwd(), p).split(path.sep).join('/');
   const fileError = (operation: string, p: string, spec: string, e: unknown): void => {
     const message = e instanceof Error ? e.message : String(e);
+    // The full message stays in fileErrors and the JSON. The console copy hides the home folder.
     fileErrors.push({ operation, path: p, spec: relSpec(spec), message });
-    console.error(`file error: ${operation} ${displayPath(p)} failed while processing spec ${relSpec(spec)}: ${message}; skipping`);
+    console.error(`file error: ${operation} ${displayPath(p)} failed while processing spec ${displayPath(spec)}: ${displayMessage(message, p)}; skipping`);
   };
   const files: SourceFile[] = [];
   const seenFiles = new Set<string>();
