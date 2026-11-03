@@ -2,7 +2,7 @@
 
 ## 0.7.2 (2026-11-02)
 
-A Windows fix and test release. The healing engine, the CLI flags, the exit codes, and contract version 1 are unchanged. Behavior on macOS and Linux is unchanged.
+A Windows fix and test release. The healing engine, the exit codes, and contract version 1 are unchanged. There is one new flag, `--ascii`. On macOS and Linux the only output change is the new `patch:` line and the shorter console paths.
 
 - **Fixed:** On Windows, a `--run-timeout` stop or an output overflow now stops the Playwright, Cypress, or Mocha child with `taskkill /T /F` and waits for it. Before, only the direct child was killed, so the test workers and the browser could keep running.
 - **Fixed:** On Windows, heal now tracks each child run, so a Ctrl+C or a closed console window stops the child tree before heal removes its temporary folders.
@@ -10,6 +10,8 @@ A Windows fix and test release. The healing engine, the CLI flags, the exit code
 - **Fixed:** On Windows, every child process heal starts is started with its window hidden, so no extra console window opens when heal runs without a console of its own.
 - **Fixed:** On Windows, a Selenium heal links the project's `node_modules` into the scratch copy with a junction. A junction needs no administrator rights or Developer Mode.
 - **Fixed:** The console no longer shows your home folder in a file path. `using storage state from` now prints the path relative to the folder where you run heal, for example `.auth\state.json`, and any other path in the home folder starts with `<home>`, the same mark that qa-core-flaky uses. The `file error:` line and the `[verbose] ignored configPath` line follow the same rule. The results file and the findings contract keep the full path. Reported by Abdul Rafay.
+- **Fixed:** On Windows, the report symbols (▸ · → ✓ ✗ ›) no longer show as garbled text in Windows PowerShell 5.1. Heal prints plain ASCII instead (`>` `-` `->` `[ok]` `[x]` `>`) on Windows, unless the output is an interactive Windows Terminal, VS Code, or ConEmu console. `--ascii` turns ASCII on anywhere. `QA_CORE_HEAL_ASCII=1` turns it on and `QA_CORE_HEAL_ASCII=0` turns it off. The `--output` report file gets the same text as the console. `--json` output is never changed. Reported by Abdul Rafay.
+- **Changed:** In findings mode, each proposal now prints a `patch:` line with the patch file path, relative to the folder where you run heal, for example `patch: .qa-core\heal\patches\<findingId>.diff` on Windows. The patch is still written to `.qa-core/heal/patches` next to the results file, as before. Reported by Abdul Rafay.
 - **Fixed:** The `author` block in `package.json` uses the same 2-space indent as the rest of the file.
 - **Changed:** The copyright holder in `LICENSE` is now SprintSynergy, the same as the package author.
 - **Tests:** The tests that read the Linux `/proc` process table are skipped on macOS and Windows with a clear reason instead of failing. They still run in CI on Linux.
@@ -17,6 +19,7 @@ A Windows fix and test release. The healing engine, the CLI flags, the exit code
 - **Tests:** New tests force the Windows path with a fake `taskkill` and check the exact arguments, the hidden window, the fallback when `taskkill` cannot start, and the cleanup of tracked children after a signal.
 - **Tests:** New tests cover the delete retries, a locked output folder that the exit cleanup removes, the `SIGBREAK` trap, and a Ctrl+C that removes an output folder while a child still writes to it.
 - **Tests:** New tests cover the console path rule on Windows and POSIX: a path inside the working folder, a path elsewhere in the home folder, a different drive, a folder name that only starts with the username, mixed case, and forward slashes. A heal run checks that a detected `.auth/state.json` is announced as a relative path, or with `<home>` when heal runs from another folder.
+- **Tests:** New tests cover the ASCII decision (Windows console, pipe, Windows Terminal, VS Code, ConEmu, the flag, and the environment variable), the symbol swap, the help text, error lines, an unchanged `--json` output, and a findings run with `--ascii`. A proposal run checks the `patch:` line, and a refusal checks that there is none. The test script sets `QA_CORE_HEAL_ASCII=0` so the existing symbol checks also pass on Windows.
 - **Tests:** The version checks and the README wording checks now expect 0.7.2.
 - **Docs:** The README explains how heal stops child runs on Windows, and that `$LASTEXITCODE` shows 1 after Ctrl+C when `npx` runs through `npx.ps1` in Windows PowerShell.
 - **Docs:** The `capabilities --json` example in the README shows version 0.7.2.

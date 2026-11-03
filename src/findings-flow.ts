@@ -483,6 +483,11 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     console.error(`[verbose] ignored configPath ${displayPath(cfg, o.cwd)}: ${why}`);
   }
 
+  /** The patch path from the folder heal runs in, with this system's separators. */
+  function patchShown(patchFile: string): string {
+    return displayPath(path.resolve(path.dirname(o.resultsPath), patchFile), o.cwd);
+  }
+
   noteIgnoredConfig(o.cwd);
 
   for (const f of doc.findings) {
@@ -491,6 +496,7 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     entries.push(entry);
     const tag = entry.status === 'refused' && entry.refusal ? `refused (${entry.refusal.code})` : entry.status;
     say(`  ${tag}: ${entry.explanation}`);
+    if (entry.patchFile) say(`  patch: ${patchShown(entry.patchFile)}`);
   }
 
   /** Each finding gets its own Playwright output folders, removed afterwards, so runs at the same time do not clear each other's files. */

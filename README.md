@@ -192,6 +192,7 @@ re-resolved element differs: expected an element matching "search panel 42"
 | `--verify` / `--no-verify` | re-run previously failing tests after applying (default on); `--no-verify` skips the re-run |
 | `--max-heals <n>` | cap heals per run |
 | `--no-color` | disable ANSI colors; the `NO_COLOR` env var is honored automatically |
+| `--ascii` | print plain ASCII report symbols (`>` `-` `->` `[ok]` `[x]`) instead of ▸ · → ✓ ✗. This is the default on Windows, except in an interactive Windows Terminal, VS Code, or ConEmu console. `QA_CORE_HEAL_ASCII=1` forces ASCII and `QA_CORE_HEAL_ASCII=0` keeps the symbols. `--json` output is never changed |
 | `--test <title>` | run and heal exactly one test of one spec file. Give a title, or `"Describe › title"`. Needs the spec file path. Not with `--scan` |
 | `--findings <file>` | read a heal findings file (contract version 1) instead of a spec path. Needs `--results` |
 | `--results <file>` | where `--findings` writes the heal results file. Needs `--findings` |
@@ -251,7 +252,7 @@ The first command is qa-core-flaky. It writes the findings file. The second comm
 
 **The handoff gate.** A finding with the handoff `none` is refused with the code `ineligible-handoff`, and no test is run for it. qa-core-heal also checks the verdict and the gates in the finding itself, so a real bug or an environment issue is never run as a locator problem. A finding with the handoff `suggest` is not run either.
 
-**Nothing is applied without your word.** `--dry-run` is the default. Each proposal comes with a patch file in `.qa-core/heal/patches`, next to the results file. Only `--apply` writes the change to your spec, and it asks first. `--apply --yes` skips the question. Without a terminal and without `--yes`, the answer is no and the entry stays `proposed`.
+**Nothing is applied without your word.** `--dry-run` is the default. Each proposal comes with a patch file in `.qa-core/heal/patches`, next to the results file. The console prints its path after the proposal, relative to the folder where you run heal, for example `patch: .qa-core/heal/patches/<findingId>.diff` (`.qa-core\heal\patches\<findingId>.diff` on Windows). The results file stores the same path in `patchFile`, relative to the results file. Only `--apply` writes the change to your spec, and it asks first. `--apply --yes` skips the question. Without a terminal and without `--yes`, the answer is no and the entry stays `proposed`.
 
 **One result per finding, in the same order.** Each entry has a `status`:
 

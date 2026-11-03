@@ -61,7 +61,7 @@
     "heal": "npm run build && node dist/cli.js",
     "demo": "npm run build && node example-project/scripts/demo.mjs",
     "evals": "npm run build && node evals/run-evals.mjs",
-    "test": "npm run build && node --import ./tests/helpers/temps.mjs --test tests/*.test.mjs",
+    "test": "npm run build && node --import ./tests/helpers/temps.mjs --import ./tests/helpers/glyphs-env.mjs --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },

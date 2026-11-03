@@ -18,6 +18,7 @@ import type { ChildRun, NeutralTestResult, SpecBatchSelection } from './adapters
 import { buildCapabilities, ContractError, parseFindings, toolVersion } from './contract.js';
 import { configArgFor, configIgnoreReason, lineShift, runFindingsFlow } from './findings-flow.js';
 import { matchTitle, resolveTarget, type Resolution } from './targeted.js';
+import { installAsciiConsole, toAsciiGlyphs, useAsciiGlyphs } from './glyphs.js';
 
 /**
  * qa-core-heal CLI.
@@ -153,6 +154,23 @@ interface CliArgs {
  */
 const jsonErrorMode = process.argv.includes('--json');
 
+/**
+ * Plain ASCII report symbols (see glyphs.ts). Also decided before parsing,
+ * so a parse-time error prints cleanly too.
+ */
+const asciiMode = useAsciiGlyphs({
+  flag: process.argv.includes('--ascii'),
+  env: process.env,
+  platform: process.platform,
+  isTTY: process.stdout.isTTY === true,
+});
+
+/** The --output report gets the same symbols as the console. */
+function reportText(lines: string[]): string {
+  const text = lines.join('\n') + '\n';
+  return asciiMode ? toAsciiGlyphs(text) : text;
+}
+
 function applyFramework(cli: CliArgs, root: string, configPath: string | null): void {
   const decision = detectFramework({ root, flag: cli.framework, configPath });
   if (!decision.ok) fail(decision.message, 2);
@@ -222,6 +240,8 @@ ${frameworkHelpLine()}
       --shadow-runs <n>          scratch re-runs that must all pass before a proposal is verified (default 3, with --findings)
       --audit-log <path>         append applied heals to this JSONL file
       --no-color                 disable ANSI colors (the NO_COLOR env var is honored automatically)
+      --ascii                    print plain ASCII report symbols instead of Unicode ones. The default on Windows, except in an
+                                 interactive Windows Terminal, VS Code, or ConEmu console. QA_CORE_HEAL_ASCII=1 or 0 forces it on or off
 
 Exit codes: 0 success · 1 error, or a heal was reverted because its
 verify re-run still failed · 2 heals available but not applied, or a
@@ -268,6 +288,7 @@ function parseCliArgs(argv: string[]): CliArgs {
         'run-timeout': { type: 'string' },
         'shadow-runs': { type: 'string' },
         'no-color': { type: 'boolean' },
+        ascii: { type: 'boolean' },
       },
     }));
   } catch (e) {
@@ -496,7 +517,7 @@ async function runFindingsMode(cli: CliArgs, loaded: ReturnType<typeof loadConfi
   if (cli.output) {
     const outPath = path.resolve(cli.output);
     process.on('exit', () => {
-      try { fs.writeFileSync(outPath, reportLines.join('\n') + '\n'); } catch { /* best effort */ }
+      try { fs.writeFileSync(outPath, reportText(reportLines)); } catch { /* best effort */ }
     });
   }
   say(`▸ Reading ${parsed.doc.findings.length} finding(s) from ${path.relative(process.cwd(), findingsPath) || findingsPath}${write ? '' : '  (dry run, nothing is written to source files)'}`);
@@ -609,6 +630,7 @@ function chosenShadowRuns(cli: CliArgs, cfg: { heal?: { shadowRuns?: number } })
 
 async function main(): Promise<void> {
   installSignalCleanup();
+  if (asciiMode) installAsciiConsole({ stdout: !jsonErrorMode });
   const cli = parseCliArgs(process.argv);
   if (cli.help) {
     console.log(HELP);
@@ -718,7 +740,7 @@ async function main(): Promise<void> {
   if (cli.output) {
     const outPath = path.resolve(cli.output);
     process.on('exit', () => {
-      try { fs.writeFileSync(outPath, reportLines.join('\n') + '\n'); } catch { /* best effort */ }
+      try { fs.writeFileSync(outPath, reportText(reportLines)); } catch { /* best effort */ }
     });
   }
   // Per-locator lines are grouped under their source file, so a spec that

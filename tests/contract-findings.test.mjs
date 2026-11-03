@@ -174,6 +174,7 @@ test('refusal ineligible-handoff: a handoff of none is refused and no test runs'
     assert.equal(e.verification.outcome, 'not-run');
     assert.deepEqual(e.changes, []);
     assert.equal(e.patchFile, null);
+    assert.doesNotMatch(r.stdout, /^\s*patch:/m, 'a refusal has no patch line');
     assert.deepEqual(countOf(s.counter), [], 'no test may run');
     assert.equal(s.spec().includes('#email-7d21ac'), true);
   } finally { s.done(); }
@@ -197,6 +198,21 @@ test('refusal ineligible-handoff: heal does not trust the mode alone', async () 
     assert.match(results.results[1].refusal.message, /environment-issue/);
     assert.match(results.results[2].refusal.message, /repeatable-failure/);
     assert.deepEqual(countOf(s.counter), []);
+  } finally { s.done(); }
+});
+
+test('--ascii prints the findings report with plain ASCII symbols (Abdul, 2026-11-03)', async () => {
+  const s = await setup(HEALABLE_BODY);
+  try {
+    const f = finding({ mode: 'none', verdict: 'likely-real-bug', primaryRuleId: 'ASSERT-REAL' });
+    const uni = await runFindings(s, [f]);
+    assert.match(uni.r.stdout, /^▸ /m);
+    assert.match(uni.r.stdout, / · /);
+    const { r } = await runFindings(s, [f], ['--dry-run', '--ascii']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /[▸›·→✓✗…—–]/);
+    assert.match(r.stdout, new RegExp(`^> ${f.findingId} `, 'm'));
+    assert.match(r.stdout, /^> Wrote heal-results\.json: 0 proposed - 0 applied - 1 refused/m);
   } finally { s.done(); }
 });
 
@@ -242,6 +258,10 @@ test('third one', async ({ page }) => { log('third one'); await page.goto('/'); 
     // The patch file is a real unified diff that applies to the untouched spec.
     const patch = path.join(s.dir, e.patchFile);
     assert.equal(fs.existsSync(patch), true);
+    // The console names the patch relative to the folder heal ran in (Abdul, 2026-11-03).
+    const shown = path.join('.qa-core', 'heal', 'patches', `${f.findingId}.diff`);
+    assert.equal(e.patchFile, `.qa-core/heal/patches/${f.findingId}.diff`);
+    assert.ok(r.stdout.split(/\r?\n/).includes(`  patch: ${shown}`), r.stdout);
     const check = spawnSync('git', ['apply', '--check', '-p1', patch], { cwd: s.dir, encoding: 'utf8' });
     assert.equal(check.status, 0, check.stderr);
     spawnSync('git', ['apply', '-p1', patch], { cwd: s.dir });
