@@ -1551,7 +1551,8 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
     const skipped = templateGotos(f.src);
     if (skipped.length === 0) continue;
     templateSkippedFiles.add(f.path);
-    const rel = path.relative(process.cwd(), f.path).split(path.sep).join('/') || f.path;
+    // Console only: relative to the working folder, or <home>, with `/` as before.
+    const rel = displayPath(f.path).split(path.sep).join('/');
     for (const g of skipped) console.error(templateRouteSkipLine(rel, g.line, g.raw));
   }
 

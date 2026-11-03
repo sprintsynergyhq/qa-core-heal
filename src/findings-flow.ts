@@ -491,7 +491,7 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
   noteIgnoredConfig(o.cwd);
 
   for (const f of doc.findings) {
-    say(`▸ ${f.findingId}  ${f.file} · ${f.titlePath.join(' › ')}  (handoff: ${f.handoff.mode})`);
+    say(`▸ ${f.findingId}  ${displayPath(f.file, o.cwd)} · ${f.titlePath.join(' › ')}  (handoff: ${f.handoff.mode})`);
     const entry = await processFinding(f);
     entries.push(entry);
     const tag = entry.status === 'refused' && entry.refusal ? `refused (${entry.refusal.code})` : entry.status;
@@ -700,7 +700,7 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     // 5. Apply only on request.
     if (!o.apply) return entry;
     say(`  proposed change${changes.length === 1 ? '' : 's'}:`);
-    for (const c of changes) { say(`    ${c.file}:${c.startLine}`); say(`      - ${c.before}`); say(`      + ${c.after}`); }
+    for (const c of changes) { say(`    ${displayPath(c.file, o.cwd)}:${c.startLine}`); say(`      - ${c.before}`); say(`      + ${c.after}`); }
     if (!(await o.confirm())) {
       say('  not applied: consent was not given.');
       return entry;

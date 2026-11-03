@@ -19,6 +19,7 @@ import { buildCapabilities, ContractError, parseFindings, toolVersion } from './
 import { configArgFor, configIgnoreReason, lineShift, runFindingsFlow } from './findings-flow.js';
 import { matchTitle, resolveTarget, type Resolution } from './targeted.js';
 import { installAsciiConsole, toAsciiGlyphs, useAsciiGlyphs } from './glyphs.js';
+import { consolePath, hideHome } from './display-path.js';
 
 /**
  * qa-core-heal CLI.
@@ -169,6 +170,27 @@ const asciiMode = useAsciiGlyphs({
 function reportText(lines: string[]): string {
   const text = lines.join('\n') + '\n';
   return asciiMode ? toAsciiGlyphs(text) : text;
+}
+
+/**
+ * A file path for a console line. Relative to the working folder when that
+ * cannot show the username, otherwise the home folder shows as `<home>`
+ * (see display-path.ts). With `slash`, the separators are `/`. JSON output
+ * keeps its own paths.
+ */
+function shown(p: string, slash = false): string {
+  return consolePath(p, slash);
+}
+
+/**
+ * The echo of the path the user typed. It stays verbatim, with the user's
+ * separators, unless it would show the username: from a folder above the
+ * home folder, from another drive, or as an absolute home path. Then it is
+ * shown() with `<home>`.
+ */
+function typedTarget(t: string): string {
+  const s = shown(t);
+  return s === '<home>' || s.startsWith('<home>/') || s.startsWith('<home>\\') ? s : t;
 }
 
 function applyFramework(cli: CliArgs, root: string, configPath: string | null): void {
@@ -463,7 +485,7 @@ function revertSummary(n: number, reasons: Array<'locator' | 'non-locator'>): st
 /** --verbose/--debug reporting around child Playwright runs. Extra lines
  *  only, on stderr — verdicts and messages stay untouched. */
 function logChildRun(cli: CliArgs, run: ChildRun): void {
-  if (cli.verbose) console.error(`[verbose] child: ${run.command} (exit ${run.status ?? 'spawn-error'})`);
+  if (cli.verbose) console.error(`[verbose] child: ${hideHome(run.command)} (exit ${run.status ?? 'spawn-error'})`);
   if (cli.debug) {
     if (run.stdout) console.error(`[debug] child stdout:\n${run.stdout}`);
     if (run.stderr) console.error(`[debug] child stderr:\n${run.stderr}`);
@@ -520,7 +542,7 @@ async function runFindingsMode(cli: CliArgs, loaded: ReturnType<typeof loadConfi
       try { fs.writeFileSync(outPath, reportText(reportLines)); } catch { /* best effort */ }
     });
   }
-  say(`▸ Reading ${parsed.doc.findings.length} finding(s) from ${path.relative(process.cwd(), findingsPath) || findingsPath}${write ? '' : '  (dry run, nothing is written to source files)'}`);
+  say(`▸ Reading ${parsed.doc.findings.length} finding(s) from ${shown(findingsPath)}${write ? '' : '  (dry run, nothing is written to source files)'}`);
 
   const outcome = await runFindingsFlow({
     doc: parsed.doc,
@@ -561,7 +583,7 @@ async function runFindingsMode(cli: CliArgs, loaded: ReturnType<typeof loadConfi
   fs.writeFileSync(tmp, `${JSON.stringify(outcome.doc, null, 2)}\n`);
   fs.renameSync(tmp, resultsPath);
   const n = (s: string): number => outcome.doc.results.filter((r) => r.status === s).length;
-  say(`\n▸ Wrote ${path.relative(process.cwd(), resultsPath) || resultsPath}: ${n('proposed')} proposed · ${n('applied')} applied · ${n('refused')} refused · ${n('not-locator')} not a locator problem · ${n('nothing-to-heal')} nothing to heal · ${n('error')} error`);
+  say(`\n▸ Wrote ${shown(resultsPath)}: ${n('proposed')} proposed · ${n('applied')} applied · ${n('refused')} refused · ${n('not-locator')} not a locator problem · ${n('nothing-to-heal')} nothing to heal · ${n('error')} error`);
   if (cli.json) console.log(JSON.stringify(outcome.doc, null, 2));
   if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
 }
@@ -751,7 +773,7 @@ async function main(): Promise<void> {
     const fileHeader = (f: string): void => {
       if (f === currentFile) return;
       currentFile = f;
-      say(`\n  ${f}:`);
+      say(`\n  ${shown(f, true)}:`);
     };
     return (e: HealEvent): void => {
       switch (e.type) {
@@ -787,7 +809,7 @@ async function main(): Promise<void> {
       onEvent: cli.json || !events ? undefined : makeEventPrinter(),
     });
   const sayHeader = (suffix: string): void => {
-    if (specs.length === 1) say(`▸ Healing ${path.relative(process.cwd(), specs[0]!)}${suffix}`);
+    if (specs.length === 1) say(`▸ Healing ${shown(specs[0]!)}${suffix}`);
     else say(`▸ Healing ${specs.length} spec files jointly${suffix}`);
   };
   const printDiff = (proposed: LocatorReport[]): void => {
@@ -797,7 +819,7 @@ async function main(): Promise<void> {
       // Every occurrence the heal rewrites is shown — the previewed plan
       // IS what --yes applies, line for line.
       for (const line of p.occurrenceLines ?? [p.line]) {
-        say(`  ${p.file}:${line}`);
+        say(`  ${shown(p.file, true)}:${line}`);
         say(`    - ${p.old}`);
         say(`    + ${p.new}`);
         say('');
@@ -826,7 +848,7 @@ async function main(): Promise<void> {
     }));
     if (auditEntries.length > 0) {
       appendAuditLog(auditPath, auditEntries);
-      say(`▸ Audit log: ${auditEntries.length} entr${auditEntries.length === 1 ? 'y' : 'ies'} appended to ${path.relative(process.cwd(), auditPath)}`);
+      say(`▸ Audit log: ${auditEntries.length} entr${auditEntries.length === 1 ? 'y' : 'ies'} appended to ${shown(auditPath)}`);
     }
   };
 
@@ -847,7 +869,8 @@ async function main(): Promise<void> {
         match: matchTitle(cli.test), timeoutMs: childTimeout, observe: (run) => logChildRun(cli, run),
       });
       endSpecOutput(listOut);
-      const where = path.relative(process.cwd(), target) || target;
+      // The --json error keeps the path it always had. The console gets shown().
+      const where = jsonErrorMode ? (path.relative(process.cwd(), target) || target) : shown(target);
       if (res.kind === 'not-found') fail(`No test titled "${cli.test}" was found in ${where}. Nothing was run.`);
       if (res.kind === 'ambiguous') fail(`${res.count} tests match "${cli.test}" in ${where}, and --test runs exactly one. Use the full title ("Describe › test") or --project. Nothing was run.`);
       if (res.kind === 'error') fail(`${res.message} Nothing was run.`);
@@ -899,7 +922,7 @@ async function main(): Promise<void> {
       if (!cli.json) {
         say(`\nProposed heals (${proposed.length}):\n`);
         for (const p of proposed) {
-          say(`  ${p.file}:${p.line}`);
+          say(`  ${shown(p.file, true)}:${p.line}`);
           say(`    - ${p.old}`);
           say(`    + ${p.new}`);
           say('');
@@ -952,7 +975,7 @@ async function main(): Promise<void> {
         if (!gathered.some((f) => healedFiles.has(f))) continue;
         const root = projectRootFor(spec);
         const rel = path.relative(root, spec);
-        say(`▸ Verifying ${rel} with a re-run`);
+        say(`▸ Verifying ${consolePath(spec, false, root)} with a re-run`);
         const scanOut = specOutputDir('scan-verify');
         const run = await activeAdapter().runBatch(root, {
           op: 'scan-verify',
@@ -1005,9 +1028,9 @@ async function main(): Promise<void> {
           scanRevertReasonByKey.set(`${rel}|${h.line}`, info.reason);
           if (info.reason === 'non-locator') {
             say(`✗ heal reverted: the re-run still fails, but no longer for a locator reason${info.line ? ` (${info.line})` : ''}. `
-              + `The heal may be correct; the remaining failure looks like a test or app problem. — ${rel}:${h.line} ${h.old}`);
+              + `The heal may be correct; the remaining failure looks like a test or app problem. — ${shown(h.file, true)}:${h.line} ${h.old}`);
           } else {
-            say(`✗ heal reverted: re-run still failing after heal — ${rel}:${h.line} ${h.old}`);
+            say(`✗ heal reverted: re-run still failing after heal — ${shown(h.file, true)}:${h.line} ${h.old}`);
           }
         }
         say(revertSummary(revertedHeals.size,
@@ -1099,7 +1122,7 @@ async function runFirstFlow(ctx: RunFirstCtx): Promise<void> {
 
   // The echo shows what the USER typed (verbatim, their separators), never
   // a converted form; testDir-derived runs keep the derived description.
-  say(`▸ Running ${ctx.displayTarget ?? (rels.length === 1 ? rels[0]! : `${rels.length} spec files`)} to find failures`);
+  say(`▸ Running ${(ctx.displayTarget !== undefined ? typedTarget(ctx.displayTarget) : undefined) ?? (rels.length === 1 ? consolePath(specs[0]!, true, root) : `${rels.length} spec files`)} to find failures`);
   // --no-trace: for setups where tracing is unavailable or unwanted (custom
   // browser launches, older Playwright); failure URLs then come from static
   // route inference, or the locator is refused when no route is knowable.
@@ -1454,9 +1477,9 @@ async function runFirstFlow(ctx: RunFirstCtx): Promise<void> {
             say('The run timeout was reached during the re-run, so the heal was reverted.');
           } else if (info?.reason === 'non-locator') {
             say(`  ✗ heal reverted: the re-run still fails, but no longer for a locator reason${info.line ? ` (${info.line})` : ''}. `
-              + `The heal may be correct; the remaining failure looks like a test or app problem. — ${rel}:${h.line} ${h.old}`);
+              + `The heal may be correct; the remaining failure looks like a test or app problem. — ${shown(h.file, true)}:${h.line} ${h.old}`);
           } else {
-            say(`  ✗ heal reverted: re-run still failing after heal — ${rel}:${h.line} ${h.old}`);
+            say(`  ✗ heal reverted: re-run still failing after heal — ${shown(h.file, true)}:${h.line} ${h.old}`);
           }
         }
         say(revertSummary(revertedHeals.size,
