@@ -14,6 +14,7 @@ import { applyQuoteStyle } from './quotes.js';
 import { kindsFromTokens, kindsFromTrailingApi, kindOfElement, kindConflict, type ElementKind } from './kind.js';
 import { matchFuzzy, isGeneratedIdentifier, type FuzzyCandidate } from './fuzzy.js';
 import { loadAuthSetup, withTimeout } from './auth-setup.js';
+import { displayPath } from './display-path.js';
 
 /**
  * Standalone selector healing for an existing Playwright spec.
@@ -1483,7 +1484,7 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
   const fileError = (operation: string, p: string, spec: string, e: unknown): void => {
     const message = e instanceof Error ? e.message : String(e);
     fileErrors.push({ operation, path: p, spec: relSpec(spec), message });
-    console.error(`file error: ${operation} ${p} failed while processing spec ${relSpec(spec)}: ${message}; skipping`);
+    console.error(`file error: ${operation} ${displayPath(p)} failed while processing spec ${relSpec(spec)}: ${message}; skipping`);
   };
   const files: SourceFile[] = [];
   const seenFiles = new Set<string>();
@@ -1758,7 +1759,7 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
     }
     if (detected) {
       storageState = detected;
-      console.error(`using storage state from ${detected}`);
+      console.error(`using storage state from ${displayPath(detected)}`);
     }
   }
   // A saved session is used FIRST when present: it is fast and runs no

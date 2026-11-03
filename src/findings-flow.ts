@@ -20,6 +20,7 @@ import {
   matchFinding, realPathOf, resolveTarget, type RunObserver,
 } from './targeted.js';
 import { stripAnsi } from './run.js';
+import { displayPath } from './display-path.js';
 
 /**
  * The findings flow: read the handoff decisions of qa-core-flaky and write
@@ -479,7 +480,7 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     if (configArgFor(o.cwd, cfg, root) !== null) return;
     configNoted = true;
     const why = configIgnoreReason(o.cwd, cfg, root) ?? 'it is outside the project';
-    console.error(`[verbose] ignored configPath ${cfg}: ${why}`);
+    console.error(`[verbose] ignored configPath ${displayPath(cfg, o.cwd)}: ${why}`);
   }
 
   noteIgnoredConfig(o.cwd);

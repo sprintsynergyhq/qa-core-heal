@@ -151,9 +151,47 @@ test('a conventional .auth/state.json is auto-detected and announced', async () 
     }));
     const loc = result.locators[0];
     assert.equal(loc.status, 'healed');
-    assert.match(stderr, /using storage state from .*\.auth[\/\\]state\.json/);
+    assert.match(stderr, /^using storage state from \.auth[\/\\]state\.json$/m);
+    // The working folder is not printed, so a terminal log shows no home folder.
+    assert.ok(!stderr.includes(fs.realpathSync(dir)), 'the announced path is relative to the working folder');
+    assert.ok(!stderr.includes(dir), 'the announced path is relative to the working folder');
   } finally {
     process.chdir(prevCwd);
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a detected storage state outside the working folder hides the home folder as <home>', async () => {
+  const server = await startAuthServer();
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const dir = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
+  const project = path.join(dir, 'kit');
+  const elsewhere = path.join(dir, 'elsewhere');
+  fs.mkdirSync(path.join(project, '.auth'), { recursive: true });
+  fs.mkdirSync(elsewhere);
+  fs.writeFileSync(path.join(project, 'package.json'), '{"name":"kit","private":true}\n');
+  const spec = writeSpec(project);
+  storageStateFile(project, '.auth/state.json', 'valid-token');
+  const prevCwd = process.cwd();
+  const prevHome = process.env.HOME;
+  const prevProfile = process.env.USERPROFILE;
+  process.env.HOME = dir;
+  process.env.USERPROFILE = dir;
+  process.chdir(elsewhere);
+  try {
+    const { result, stderr } = await withCapturedStderr(() => heal({
+      specPaths: [spec], baseUrl: base, write: false,
+      targets: [{ selector: "locator('#quantiy')", url: `${base}/app`, test: 'x' }],
+    }));
+    assert.equal(result.locators[0].status, 'healed');
+    const expected = ['<home>', 'kit', '.auth', 'state.json'].join(path.sep);
+    assert.ok(stderr.split('\n').includes(`using storage state from ${expected}`), stderr);
+    assert.ok(!stderr.includes(dir), 'the home folder is not printed');
+  } finally {
+    process.chdir(prevCwd);
+    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+    if (prevProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prevProfile;
     server.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
