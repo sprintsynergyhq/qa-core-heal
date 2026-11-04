@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, 'fixtures', 'selenium-saucedemo-style');
@@ -67,7 +67,7 @@ export async function runSeleniumFixture({ cli, seleniumPkg, mochaPkg, chrome })
     if (item.match && !(row.new ?? '').includes(item.match)) failures.push(`${item.name}: ${row.new}`);
     if (item.ambiguous && row.ambiguous !== true) failures.push(`${item.name}: not ambiguous`);
     if (item.code) {
-      const { refusalFromReason } = await import(path.join(here, '..', 'dist', 'findings-flow.js'));
+      const { refusalFromReason } = await import(pathToFileURL(path.join(here, '..', 'dist', 'findings-flow.js')).href);
       const code = refusalFromReason(row.reason ?? '', row.ambiguous === true);
       if (code !== item.code) failures.push(`${item.name}: refusal ${code}, expected ${item.code}`);
     }

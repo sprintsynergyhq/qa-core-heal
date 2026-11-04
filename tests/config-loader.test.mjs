@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Publish blockers 2 and 3: importing the user's playwright.config.ts must
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cliJs = path.join(repoRoot, 'dist', 'cli.js');
 const { supportsTypeStripping, needsStripFlag, typeStrippingGateMessage, resolvePlaywrightConfig } = await import(
-  path.join(repoRoot, 'dist', 'playwright-config.js')
+  pathToFileURL(path.join(repoRoot, 'dist', 'playwright-config.js')).href
 );
 
 function tempProject(files) {

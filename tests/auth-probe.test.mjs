@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Authenticated probing: --storage-state / auto-detection, redirect
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { heal } = await import(path.join(repoRoot, 'dist', 'heal.js'));
+const { heal } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
 
 const APP_HTML = '<html><body><h1>App</h1><label for="quantity">Quantity</label><input id="quantity" type="text" /></body></html>';
 const LOGIN_HTML = '<html><body><h1>Log in</h1><label for="email">Email</label><input id="email" type="text" /></body></html>';

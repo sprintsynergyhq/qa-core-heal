@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Bug 2 end-to-end: heal() must probe each locator on the route its spec
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { heal } = await import(path.join(repoRoot, 'dist', 'heal.js'));
+const { heal } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
 
 const PAGES = {
   '/': '<html><body><h1>Home</h1><a href="/a.html">Orders</a></body></html>',

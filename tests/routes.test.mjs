@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Bug 2: per-locator page context. Locators must be probed on the route
@@ -13,7 +13,7 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const {
   parseGotos, routeForLine, stripAutoSuffixes, buildRoutePlan, routesForLocator, routeLabel,
   templateGotos, templateRouteSkipLine,
-} = await import(path.join(repoRoot, 'dist', 'routes.js'));
+} = await import(pathToFileURL(path.join(repoRoot, 'dist', 'routes.js')).href);
 
 test('parseGotos finds literal goto routes with line numbers', () => {
   const src = [

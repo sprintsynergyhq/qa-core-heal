@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   assertValid, baseOf, finding, findingsDoc, inventoryServer, makeNestedProject, makeProject, readJsonFile, repoRoot, rm, runCli,
   startServer, validateFindings, validateResults, writeFindings,
@@ -137,7 +138,7 @@ test('a spec reached through a symbolic link folder that points out of the proje
 });
 
 test('testDirBase uses the config folder when testDir is unset', async () => {
-  const { testDirBase } = await import(path.join(repoRoot, 'dist', 'findings-flow.js'));
+  const { testDirBase } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'findings-flow.js')).href);
   const dir = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
   const custom = path.join(dir, 'suite');
   fs.mkdirSync(path.join(dir, 'tests'));
@@ -163,9 +164,9 @@ test('fills mail', async ({ page }) => {
   });
   const spec = path.join(dir, 'tests/a.spec.ts');
   const original = fs.readFileSync(spec, 'utf8');
-  const { parseFindings } = await import(path.join(repoRoot, 'dist', 'contract.js'));
-  const { runFindingsFlow, throwOnNextVerifyForTest } = await import(path.join(repoRoot, 'dist', 'findings-flow.js'));
-  const { unverifiedApplyCount } = await import(path.join(repoRoot, 'dist', 'process-guard.js'));
+  const { parseFindings } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'contract.js')).href);
+  const { runFindingsFlow, throwOnNextVerifyForTest } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'findings-flow.js')).href);
+  const { unverifiedApplyCount } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'process-guard.js')).href);
   const findingsPath = writeFindings(dir, [finding()], baseOf(server));
   const parsed = parseFindings(fs.readFileSync(findingsPath, 'utf8'));
   throwOnNextVerifyForTest(new Error('verify blew up'));

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * --auth-setup: probe after running the user's OWN login function against
@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { heal } = await import(path.join(repoRoot, 'dist', 'heal.js'));
-const { loadAuthSetup, isLoaderNoise } = await import(path.join(repoRoot, 'dist', 'auth-setup.js'));
+const { heal } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
+const { loadAuthSetup, isLoaderNoise } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'auth-setup.js')).href);
 
 const APP_HTML = '<html><body><h1>App</h1><label for="quantity">Quantity</label><input id="quantity" type="text" /></body></html>';
 const LOGIN_HTML = '<html><body><h1>Log in</h1><label for="email">Email</label><input id="email" type="text" /></body></html>';
@@ -313,7 +313,7 @@ export async function login(page: Page): Promise<void> { /* no-op */ }
 `);
       fs.writeFileSync(path.join(dir, 'runner.mjs'), `
 import path from 'node:path';
-const { loadAuthSetup } = await import(${JSON.stringify(path.join(repoRoot, 'dist', 'auth-setup.js'))});
+const { loadAuthSetup } = await import(${JSON.stringify(pathToFileURL(path.join(repoRoot, 'dist', 'auth-setup.js')).href)});
 const loaded = await loadAuthSetup('login.ts#login', ${JSON.stringify(dir)});
 await loaded.fn(null);
 // A new phrasing inside a known family must be filtered; a user-code

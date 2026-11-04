@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { repoRoot, runCli } from './helpers/contract.mjs';
 
-const { detectFramework } = await import(path.join(repoRoot, 'dist', 'adapters', 'detect.js'));
-const { useAdapter } = await import(path.join(repoRoot, 'dist', 'adapters', 'index.js'));
+const { detectFramework } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'detect.js')).href);
+const { useAdapter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'index.js')).href);
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'qa-core-heal-fw-'));

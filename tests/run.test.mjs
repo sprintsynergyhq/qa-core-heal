@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 0.2.0 run-first mode primitives: failure classification (locator vs not),
@@ -13,9 +13,9 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const { stripAnsi, classifyFailure, parseConsent, traceFailureUrl, collectTests, parseJsonReport } = await import(
-  path.join(repoRoot, 'dist', 'run.js')
+  pathToFileURL(path.join(repoRoot, 'dist', 'run.js')).href
 );
-const { selectorSignature } = await import(path.join(repoRoot, 'dist', 'heal.js'));
+const { selectorSignature } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
 
 // Real message shapes captured from Playwright 1.60's JSON reporter.
 const ACTION_TIMEOUT = "TimeoutError: locator.click: Timeout 2500ms exceeded.\nCall log:\n  - waiting for locator('#confirm-orderr')\n";

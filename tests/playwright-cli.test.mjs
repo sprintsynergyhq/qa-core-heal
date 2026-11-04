@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 0.2.2: cross-platform Playwright child runs. The internal run must not
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { runPlaywrightCli, describeFailedRun, toCliFileFilter, startRunBudget } = await import(path.join(repoRoot, 'dist', 'playwright-cli.js'));
+const { runPlaywrightCli, describeFailedRun, toCliFileFilter, startRunBudget } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'playwright-cli.js')).href);
 
 test('the local @playwright/test CLI is resolved and run directly — no npx, no shell', async () => {
   // The direct path must NEVER print the npx-fallback note.
@@ -160,7 +160,7 @@ test('a run budget is shared, and a spent budget does not start another child', 
 });
 
 test('each scratch run samples the timeout again', { timeout: 60000 }, async () => {
-  const { scratchVerify } = await import(path.join(repoRoot, 'dist', 'scratch.js'));
+  const { scratchVerify } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'scratch.js')).href);
   const dir = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
   try {
     fs.mkdirSync(path.join(dir, 'tests'));

@@ -5,7 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Review of PR 15: from a folder above the home folder (C:\Users, /home), or
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cliJs = path.join(repoRoot, 'dist', 'cli.js');
-const { consolePath, hideHome } = await import(path.join(repoRoot, 'dist', 'display-path.js'));
+const { consolePath, hideHome } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'display-path.js')).href);
 
 const WIN_HOME = 'C:\\Users\\zbob';
 

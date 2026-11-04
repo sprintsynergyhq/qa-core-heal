@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { displayMessage, displayPath } = await import(path.join(repoRoot, 'dist', 'display-path.js'));
+const { displayMessage, displayPath } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'display-path.js')).href);
 
 const WIN_HOME = 'C:\\Users\\zbob';
 const WIN_KIT = 'C:\\Users\\zbob\\Desktop\\qa-core-testing\\saucedemo-flaky-kit';

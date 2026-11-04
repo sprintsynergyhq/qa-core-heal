@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { playwrightJs } = await import(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'index.js'));
-const { registeredAdapters, getAdapter } = await import(path.join(repoRoot, 'dist', 'adapters', 'index.js'));
+const { playwrightJs } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'index.js')).href);
+const { registeredAdapters, getAdapter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'index.js')).href);
 
 const MEMBERS = [
   'id', 'enabled', 'detect', 'version', 'discoverConfig', 'listTests', 'runOne', 'runBatch', 'parseReport',

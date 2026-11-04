@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   assertValid, baseOf, finding, findingsDoc, makeProject, pkg, readJsonFile, rm, runCli, startServer,
@@ -607,13 +608,13 @@ test('a findings title path that starts with the project name still finds the te
 });
 
 test('every refusal code in the schema is a code this build knows', async () => {
-  const schema = readJsonFile(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'schemas', 'heal-results.v1.schema.json'));
+  const schema = readJsonFile(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'schemas', 'heal-results.v1.schema.json'));
   const text = JSON.stringify(schema);
   const codes = ['ambiguous-match', 'element-changed', 'strict-needs-human', 'possible-real-bug', 'weakens-test',
     'verification-failed', 'baseline-not-reproduced', 'no-safe-pattern', 'ai-disabled', 'ai-invalid-output',
     'ineligible-handoff', 'navigation-or-network', 'spec-not-found', 'timeout'];
   for (const c of codes) assert.equal(text.includes(`"${c}"`), true, c);
-  const { REFUSAL_CODES } = await import(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dist', 'contract.js'));
+  const { REFUSAL_CODES } = await import(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'contract.js')).href);
   assert.deepEqual([...REFUSAL_CODES].sort(), [...codes].sort());
 });
 

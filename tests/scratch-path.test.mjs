@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { fileInRoot } = await import(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'index.js'));
+const { fileInRoot } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'index.js')).href);
 
 test('fileInRoot keeps an absolute spec that is already inside the root', () => {
   const root = path.join(repoRoot, 'space dir');
@@ -38,7 +38,7 @@ test('fileInRoot normalises a specRel that starts with ./', () => {
 });
 
 test('scratch run with a space, a nested directory, and a ./ specRel runs the copied spec', { timeout: 60000 }, async () => {
-  const { scratchVerify } = await import(path.join(repoRoot, 'dist', 'scratch.js'));
+  const { scratchVerify } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'scratch.js')).href);
   const parent = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
   const dir = path.join(parent, 'space dir');
   const specRel = './tests/nested dir/a.spec.ts';

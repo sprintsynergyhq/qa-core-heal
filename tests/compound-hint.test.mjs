@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 0.3.2: hint selection per selector shape. The compound-CSS teaching
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { isCompoundCss, withCompoundHint } = await import(path.join(repoRoot, 'dist', 'heal.js'));
+const { isCompoundCss, withCompoundHint } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
 
 const cssCall = (css) => ({ level: 'css', args: { css } });
 const COMPOUND = 'compound CSS selectors carry little recoverable identity';

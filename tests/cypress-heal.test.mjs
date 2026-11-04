@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cli = path.join(repoRoot, 'dist', 'cli.js');
@@ -15,10 +15,10 @@ const cypressPkg = [
 ].filter(Boolean).find((dir) => fs.existsSync(path.join(dir, 'package.json')));
 const hasCypress = Boolean(cypressPkg);
 
-const { classifyCypressFailure, cypressFrames } = await import(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'classify.js'));
-const { parseCypressCalls } = await import(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'parse.js'));
-const { listSpecTests } = await import(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'list-tests.js'));
-const { compareVersions } = await import(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'version.js'));
+const { classifyCypressFailure, cypressFrames } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'classify.js')).href);
+const { parseCypressCalls } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'parse.js')).href);
+const { listSpecTests } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'list-tests.js')).href);
+const { compareVersions } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'version.js')).href);
 
 test('version compare treats 15.10.0 as the minimum and 16.2.0 as the getByRole line', () => {
   assert.equal(compareVersions('15.10.0', '15.10.0'), 0);
@@ -96,7 +96,7 @@ test('documented Cypress commands are not treated as custom commands', () => {
 });
 
 test('confirmSameElement finishes when the page has JavaScript disabled', async () => {
-  const { getAdapter } = await import(path.join(repoRoot, 'dist', 'adapters', 'index.js'));
+  const { getAdapter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'index.js')).href);
   const cypressJs = getAdapter('cypress-js');
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless: true });
@@ -116,7 +116,7 @@ test('confirmSameElement finishes when the page has JavaScript disabled', async 
 });
 
 test('confirmSameElement accepts the element that carries the token', async () => {
-  const { getAdapter } = await import(path.join(repoRoot, 'dist', 'adapters', 'index.js'));
+  const { getAdapter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'index.js')).href);
   const cypressJs = getAdapter('cypress-js');
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless: true });
@@ -189,7 +189,7 @@ test('a real Cypress run heals a test id typo and does not touch the project out
 });
 
 test('the Cypress eval runner checks the fixture pages', { skip: hasCypress ? false : 'Cypress is not installed in the test cache', timeout: 300000 }, async () => {
-  const { runCypressFixture } = await import(path.join(repoRoot, 'evals', 'run-cypress-evals.mjs'));
+  const { runCypressFixture } = await import(pathToFileURL(path.join(repoRoot, 'evals', 'run-cypress-evals.mjs')).href);
   const report = await runCypressFixture({ repoRoot, cli, cypressPkg });
   assert.deepEqual(report.failures, [], report.failures.join('\n'));
 });
@@ -230,7 +230,7 @@ test('cy.contains and cy.getByRole pick the same element as the DOM rules', { sk
     assert.equal(status, 0, stderr);
     const found = JSON.parse(fs.readFileSync(outFile, 'utf8'));
     const { chromium } = await import('playwright');
-    const { cypressMatchIds } = await import(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'unique.js'));
+    const { cypressMatchIds } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'cypress-js', 'unique.js')).href);
     const browser = await chromium.launch({ headless: true });
     try {
       const page = await browser.newPage();

@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const {
@@ -13,7 +13,7 @@ const {
   trackChildGroup, untrackChildGroup, trackUnverifiedApply, cleanupChildrenAndOutputs,
   watchChildGroup, trackedChildPids, setPlatformForTest, setTaskkillRunner,
   removeOutputDir, trackedOutputDirs, trackOutputDir, untrackOutputDir, signalExitCode, STOP_SIGNALS,
-} = await import(path.join(repoRoot, 'dist', 'process-guard.js'));
+} = await import(pathToFileURL(path.join(repoRoot, 'dist', 'process-guard.js')).href);
 
 /**
  * The reader returns null, which is the stand-in for a host with no /proc.
