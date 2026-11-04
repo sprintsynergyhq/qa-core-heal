@@ -30,6 +30,9 @@ async function nested(opts) {
 
 const entryOf = (results) => { assert.equal(results.results.length, 1); return results.results[0]; };
 
+// Windows needs Developer Mode or admin rights to create a symbolic link.
+const WIN_SYMLINK_SKIP = process.platform === 'win32' ? 'symlinks need Developer Mode on Windows' : false;
+
 /* ───────────────────────── Fix 1: --config from project.configPath ───────────────────────── */
 
 test('a nested config (SauceDemo kit layout, no config at the root) ends as proposed, and --config is passed to every Playwright call', async () => {
@@ -123,14 +126,14 @@ test('an absolute configPath cannot bring in a spec from a folder outside the pr
   await escapeCase((outside) => path.join(outside, 'playwright.config.ts'), { file: () => 'tests/x.spec.ts' });
 });
 
-test('a configPath folder that is a symbolic link out of the project cannot bring in a spec', async () => {
+test('a configPath folder that is a symbolic link out of the project cannot bring in a spec', { skip: WIN_SYMLINK_SKIP }, async () => {
   await escapeCase(() => 'linked/playwright.config.ts', {
     file: () => 'tests/x.spec.ts',
     setup: (project, outsideDir) => fs.symlinkSync(outsideDir, path.join(project, 'linked'), 'dir'),
   });
 });
 
-test('a spec reached through a symbolic link folder that points out of the project is refused', async () => {
+test('a spec reached through a symbolic link folder that points out of the project is refused', { skip: WIN_SYMLINK_SKIP }, async () => {
   await escapeCase(() => 'playwright.config.ts', {
     file: () => 'linked/tests/x.spec.ts',
     setup: (project, outsideDir) => fs.symlinkSync(outsideDir, path.join(project, 'linked'), 'dir'),
@@ -213,7 +216,7 @@ test('a findings file is resolved against testDir when it is not found from the 
   } finally { n.done(); }
 });
 
-test('a testDir that is a symbolic link outside the project is not used', async () => {
+test('a testDir that is a symbolic link outside the project is not used', { skip: WIN_SYMLINK_SKIP }, async () => {
   const server = await startServer('<html><body><input id="mail-x9" name="email" type="email"></body></html>');
   const outside = outsideProject(baseOf(server));
   const project = makeProject(baseOf(server), {
@@ -235,7 +238,7 @@ test('a testDir that is a symbolic link outside the project is not used', async 
   } finally { server.close(); rm(project); outside.done(); }
 });
 
-test('a configPath that is a folder, outside the project, or unsafe is ignored and --verbose says why', async () => {
+test('a configPath that is a folder, outside the project, or unsafe is ignored and --verbose says why', async (t) => {
   const server = await startServer('<html><body></body></html>');
   const dir = makeProject(baseOf(server), {
     'tests/a.spec.ts': "import { test } from '@playwright/test';\ntest('inside', async () => {});\n",
@@ -251,10 +254,14 @@ test('a configPath that is a folder, outside the project, or unsafe is ignored a
     fs.mkdirSync(path.join(dir, 'cfgdir'));
     let r = await run('cfgdir');
     assert.match(r.stderr, /\[verbose\] ignored configPath cfgdir: it is a folder/);
-    fs.rmSync(path.join(dir, 'playwright.config.ts'));
-    fs.symlinkSync(outsideFile, path.join(dir, 'playwright.config.ts'));
-    r = await run('playwright.config.ts');
-    assert.match(r.stderr, /\[verbose\] ignored configPath playwright\.config\.ts: it is outside the project/);
+    if (WIN_SYMLINK_SKIP) {
+      t.diagnostic(`the symbolic link case was not run: ${WIN_SYMLINK_SKIP}`);
+    } else {
+      fs.rmSync(path.join(dir, 'playwright.config.ts'));
+      fs.symlinkSync(outsideFile, path.join(dir, 'playwright.config.ts'));
+      r = await run('playwright.config.ts');
+      assert.match(r.stderr, /\[verbose\] ignored configPath playwright\.config\.ts: it is outside the project/);
+    }
     r = await run('../nope.ts');
     assert.match(r.stderr, /\[verbose\] ignored configPath \.\.\/nope\.ts: it is absolute or it contains \.\./);
   } finally { server.close(); rm(dir); rm(path.dirname(outsideFile)); }
@@ -288,7 +295,8 @@ test('every Playwright call has its own --output folder, and the project test-re
     for (const o of outputs) assert.ok(path.basename(path.dirname(o)).startsWith('qa-core-heal-out-'), o);
     // list, first run and scratch run use three different folders.
     assert.equal(new Set(outputs.map((o) => path.basename(o))).size, new Set(['list', 'first', 'scratch']).size);
-    assert.ok(outputs.some((o) => o.endsWith('/list')) && outputs.some((o) => o.endsWith('/first')) && outputs.some((o) => o.endsWith('/scratch')));
+    // The folders use the platform separator (a backslash on Windows).
+    assert.ok(outputs.some((o) => /[\\/]list$/.test(o)) && outputs.some((o) => /[\\/]first$/.test(o)) && outputs.some((o) => /[\\/]scratch$/.test(o)), outputs.join(' '));
     for (const o of new Set(outputs)) assert.equal(fs.existsSync(path.dirname(o)), false, `${o} was not removed`);
         assert.equal(fs.existsSync(path.join(n.dir, 'test-results')), false);
   } finally { n.done(); }

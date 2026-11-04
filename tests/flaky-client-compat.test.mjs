@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureBaseline, headCli } from './helpers/baseline.mjs';
+import { baselineSkipReason, ensureBaseline, headCli } from './helpers/baseline.mjs';
 import { baseOf, finding, findingsDoc, makeProject, rm, startServer } from './helpers/contract.mjs';
 
-const baselineCli = ensureBaseline();
+// A caller-supplied baseline (HEAL_BASELINE_ROOT) needs no git checkout.
+const BASELINE_SKIP = process.env.HEAL_BASELINE_ROOT ? false : baselineSkipReason();
+const baselineCli = BASELINE_SKIP ? null : ensureBaseline();
 
 function run(cli, args, cwd) {
   const runResult = spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
@@ -29,7 +31,7 @@ test('fills mail', async ({ page }) => {
 });
 `;
 
-test('flaky client shapes match 0.4.2, and capabilities keeps the keys flaky reads', async () => {
+test('flaky client shapes match 0.4.2, and capabilities keeps the keys flaky reads', { skip: BASELINE_SKIP }, async () => {
   const server = await startServer('<html><body><label>Mail <input id="mail" /></label></body></html>');
   const dir = makeProject(baseOf(server), { 'tests/a.spec.ts': SPEC });
   const doc = findingsDoc([finding({ mode: 'none' })], baseOf(server));

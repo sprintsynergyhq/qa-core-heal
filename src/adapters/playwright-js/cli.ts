@@ -17,8 +17,32 @@ import { escapeRegex } from '../../selectors.js';
  * Internal fs work keeps native separators; ONLY what crosses into the
  * Playwright child goes through this.
  */
-export function toCliFileFilter(p: string): string {
-  return escapeRegex(p.replaceAll('\\', '/'));
+export function toCliFileFilter(p: string, platform: NodeJS.Platform = process.platform): string {
+  const slashed = p.replaceAll('\\', '/');
+  if (platform !== 'win32') return escapeRegex(slashed);
+  // On Windows, Playwright tests the filter against the backslash path and
+  // then against the file URL of the spec (C:\a b\x.spec.ts becomes
+  // file:///C:/a%20b/x.spec.ts). A forward-slash filter can only match the
+  // URL, so every character the URL percent-encodes accepts both forms.
+  let out = '';
+  for (const ch of slashed) {
+    const encoded = fileUrlForm(ch);
+    out += encoded === null ? escapeRegex(ch) : `(?:${escapeRegex(ch)}|${encoded})`;
+  }
+  return out;
+}
+
+/** Printable ASCII that pathToFileURL percent-encodes on Windows (Node 22 and 24). */
+const URL_ENCODED_ASCII = ' "#%<>?[]^`{|}~';
+
+/**
+ * The percent-encoded form of one path character in a Windows file URL
+ * (Node's pathToFileURL), or null when the character is kept as it is.
+ */
+function fileUrlForm(ch: string): string | null {
+  const code = ch.codePointAt(0) ?? 0;
+  if (code > 0x20 && code < 0x7f && !URL_ENCODED_ASCII.includes(ch)) return null;
+  return [...Buffer.from(ch, 'utf8')].map((b) => `%${b.toString(16).toUpperCase().padStart(2, '0')}`).join('');
 }
 
 /**

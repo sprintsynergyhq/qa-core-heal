@@ -74,17 +74,36 @@ export function ensureBaselineAt(sha, prefix, given) {
     removeOwned(sha);
     throw new Error(`The new worktree is ${headSha(root) || 'unreadable'}, not ${sha}.`);
   }
-  const ci = spawnSync('npm', ['ci'], { cwd: root, encoding: 'utf8' });
+  // npm is npm.cmd on Windows, which Node starts only through a shell.
+  const shell = process.platform === 'win32';
+  const ci = spawnSync('npm', ['ci'], { cwd: root, encoding: 'utf8', shell });
   if (ci.status !== 0) {
     removeOwned(sha);
     throw new Error(ci.stderr || `npm ci failed in the ${sha} worktree`);
   }
-  const build = spawnSync('npm', ['run', 'build'], { cwd: root, encoding: 'utf8' });
+  const build = spawnSync('npm', ['run', 'build'], { cwd: root, encoding: 'utf8', shell });
   if (build.status !== 0) {
     removeOwned(sha);
     throw new Error(build.stderr || `build failed in the ${sha} worktree`);
   }
   return assertBaseline(root, sha);
+}
+
+/**
+ * Why a new baseline worktree cannot be built here, or false when it can.
+ * It needs git and a git checkout of this repo: a ZIP download of a branch
+ * has no history, so 8da827d cannot be checked out from it.
+ */
+export function baselineSkipReason() {
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: repoRoot, encoding: 'utf8' });
+  if (top.error) return 'git is not on the PATH';
+  const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+  let real = '';
+  try { real = fs.realpathSync(path.resolve(top.stdout.trim())); } catch { /* not a folder */ }
+  if (top.status !== 0 || !same(real, fs.realpathSync(repoRoot))) {
+    return 'the baseline needs a git checkout of qa-core-heal, and a ZIP download has no git history';
+  }
+  return false;
 }
 
 /**

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import { BASELINE_SHA, repoRoot } from './helpers/baseline.mjs';
+import { BASELINE_SHA, baselineSkipReason, repoRoot } from './helpers/baseline.mjs';
 
 test('a reused baseline that is not 8da827d is refused', () => {
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', `
@@ -17,7 +17,7 @@ test('a reused baseline that is not 8da827d is refused', () => {
   assert.match(`${run.stderr}\n${run.stdout}`, new RegExp(BASELINE_SHA));
 });
 
-test('ensureBaseline builds 8da827d in a unique worktree and removes it on exit', () => {
+test('ensureBaseline builds 8da827d in a unique worktree and removes it on exit', { skip: baselineSkipReason() }, () => {
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import path from 'node:path';
     import { spawnSync } from 'node:child_process';

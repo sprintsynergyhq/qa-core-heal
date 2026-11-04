@@ -70,6 +70,11 @@ async function runFindings(s, findings, extra = ['--dry-run'], { baseUrl = baseO
   return { r, results, findingsPath, resultsPath };
 }
 
+// Windows needs Developer Mode or admin rights to create a symbolic link.
+const WIN_SYMLINK_SKIP = process.platform === 'win32' ? 'symlinks need Developer Mode on Windows' : false;
+// The patch check uses git apply. A tester machine may not have git on the PATH.
+const HAS_GIT = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
+
 const only = (results) => {
   assert.equal(results.results.length, 1);
   return results.results[0];
@@ -219,7 +224,7 @@ test('--ascii prints the findings report with plain ASCII symbols (Windows teste
 
 /* ───────────────────────── the proposal path ───────────────────────── */
 
-test('a locator handoff gives a verified proposal, writes no source file, and leaves no scratch copy', async () => {
+test('a locator handoff gives a verified proposal, writes no source file, and leaves no scratch copy', async (t) => {
   const body = `${HEALABLE_BODY}
 test('other one', async ({ page }) => { log('other one'); await page.goto('/'); });
 test('third one', async ({ page }) => { log('third one'); await page.goto('/'); });`;
@@ -263,11 +268,15 @@ test('third one', async ({ page }) => { log('third one'); await page.goto('/'); 
     const shown = path.join('.qa-core', 'heal', 'patches', `${f.findingId}.diff`);
     assert.equal(e.patchFile, `.qa-core/heal/patches/${f.findingId}.diff`);
     assert.ok(r.stdout.split(/\r?\n/).includes(`  patch: ${shown}`), r.stdout);
-    const check = spawnSync('git', ['apply', '--check', '-p1', patch], { cwd: s.dir, encoding: 'utf8' });
-    assert.equal(check.status, 0, check.stderr);
-    spawnSync('git', ['apply', '-p1', patch], { cwd: s.dir });
-    assert.equal(s.spec().includes(e.changes[0].after), true);
-    assert.equal(s.spec().includes('#email-7d21ac'), false);
+    if (!HAS_GIT) {
+      t.diagnostic('git is not on the PATH, so the git apply check of the patch was not run');
+    } else {
+      const check = spawnSync('git', ['apply', '--check', '-p1', patch], { cwd: s.dir, encoding: 'utf8' });
+      assert.equal(check.status, 0, check.stderr);
+      spawnSync('git', ['apply', '-p1', patch], { cwd: s.dir });
+      assert.equal(s.spec().includes(e.changes[0].after), true);
+      assert.equal(s.spec().includes('#email-7d21ac'), false);
+    }
   } finally { s.done(); }
 });
 
@@ -519,7 +528,7 @@ test('refusal spec-not-found: a missing file, a missing test, and a path outside
   } finally { s.done(); }
 });
 
-test('a symlink that points outside the project says symlink', async () => {
+test('a symlink that points outside the project says symlink', { skip: WIN_SYMLINK_SKIP }, async () => {
   const s = await setup(HEALABLE_BODY);
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-core-heal-out-spec-'));
   fs.writeFileSync(path.join(outside, 'x.spec.ts'), 'export {};\n');
@@ -628,7 +637,8 @@ test('the default is three shadow runs and every one must pass', async () => {
     assert.equal(e.verification.runs, 3);
     assert.equal(e.verification.passed, 3);
     assert.equal(e.verification.failed, 0);
-    const scratch = r.stderr.split('\n').filter((l) => l.startsWith('[verbose] child:') && /--output \S+\/scratch(?:\s|$)/.test(l));
+    // The --output folder uses the platform separator (a backslash on Windows).
+    const scratch = r.stderr.split('\n').filter((l) => l.startsWith('[verbose] child:') && /--output \S+[\\/]scratch(?:\s|$)/.test(l));
     assert.equal(scratch.length, 3, r.stderr);
     assert.equal(countOf(s.counter).length, 4);
   } finally { s.done(); }
@@ -684,7 +694,7 @@ test('heal.shadowRuns must be a positive integer', async () => {
   } finally { s.done(); }
 });
 
-test('a spec symlink inside the project is refused and the message says it is a symbolic link', async () => {
+test('a spec symlink inside the project is refused and the message says it is a symbolic link', { skip: WIN_SYMLINK_SKIP }, async () => {
   const s = await setup(HEALABLE_BODY);
   try {
     fs.symlinkSync('a.spec.ts', path.join(s.dir, 'tests/link.spec.ts'));

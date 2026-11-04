@@ -18,6 +18,11 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cliJs = path.join(repoRoot, 'dist', 'cli.js');
 
+// Windows needs Developer Mode or admin rights to create a symbolic link,
+// and it ignores POSIX file modes, so chmod 000 does not block a read.
+const WIN_SYMLINK_SKIP = process.platform === 'win32' ? 'symlinks need Developer Mode on Windows' : false;
+const WIN_CHMOD_SKIP = process.platform === 'win32' ? 'Windows ignores POSIX file modes, so chmod 000 does not make a file unreadable' : false;
+
 function startServer(html) {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
@@ -65,11 +70,14 @@ test('checks ok ${n}', async ({ page }) => {
   return dir;
 }
 
-test('a directory target with a weird tree scans without crashing (26 specs)', async () => {
+test('a directory target with a weird tree scans without crashing (26 specs)', { skip: WIN_SYMLINK_SKIP }, async () => {
   const server = await startServer('<html><body><p id="ok">fine</p></body></html>');
   const base = `http://127.0.0.1:${server.address().port}`;
-  const dir = makeTree(base);
+  let dir = null;
   try {
+    // Inside the try, so a failed setup still closes the server. An open
+    // server keeps this test file running and the whole suite never ends.
+    dir = makeTree(base);
     const r = await runCli(['tests', '--scan', '--dry-run', '--verbose'], dir);
     assert.equal(r.status, 0, r.stderr);
     assert.doesNotMatch(r.stdout + r.stderr, /EISDIR/);
@@ -81,7 +89,7 @@ test('a directory target with a weird tree scans without crashing (26 specs)', a
     assert.ok(!r.stdout.includes('hidden.spec.ts'), 'symlinked dir must not be followed');
   } finally {
     server.close();
-    fs.rmSync(dir, { recursive: true, force: true });
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -129,7 +137,7 @@ test('clicks flux', async ({ page }) => {
   }
 });
 
-test('a forced fs error skips only that spec, tells the full story, and sums up', async () => {
+test('a forced fs error skips only that spec, tells the full story, and sums up', { skip: WIN_CHMOD_SKIP }, async () => {
   const server = await startServer('<html><body><p id="ok">fine</p></body></html>');
   const base = `http://127.0.0.1:${server.address().port}`;
   const dir = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
