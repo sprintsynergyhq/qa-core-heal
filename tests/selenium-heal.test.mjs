@@ -378,7 +378,14 @@ function writeProject(dir, base, spec, chromeMode = 'playwright', omitDriver = f
     type: 'commonjs',
     devDependencies: { 'selenium-webdriver': '4.51.0', mocha: '12.0.3' },
   }));
-  fs.writeFileSync(path.join(dir, '.mocharc.json'), JSON.stringify({ spec: ['test/other.test.js', 'test/login.test.js'], timeout: 20000 }));
+  // Playwright's Chrome for Testing usually accepts a session in a couple of
+  // seconds, so it keeps Mocha's 20s budget. The Chrome Selenium Manager
+  // discovers when no binary is forced is a cold system Chrome. Selenium waits
+  // 30s for ChromeDriver, and on a busy GitHub runner the session can run past
+  // 20s. beforeEach then dies with "Timeout of 20000ms exceeded" on Node 22
+  // and Node 24. 90s is enough for that startup and still fails a real hang.
+  const timeout = chromeMode === 'system' ? 90000 : 20000;
+  fs.writeFileSync(path.join(dir, '.mocharc.json'), JSON.stringify({ spec: ['test/other.test.js', 'test/login.test.js'], timeout }));
   const mark = path.join(dir, 'other-ran');
   fs.writeFileSync(path.join(dir, 'test', 'other.test.js'), "const fs = require('node:fs');\ndescribe('other', () => { it('other test', () => { fs.writeFileSync(process.env.QA_CORE_HEAL_MARK, 'yes'); }); });\n");
   fs.writeFileSync(path.join(dir, 'test', 'login.test.js'), spec);
