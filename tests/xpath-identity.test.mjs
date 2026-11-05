@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 0.3.2: semantic identity from SIMPLE XPath shapes. The CSS form
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { xpathIdentity } = await import(path.join(repoRoot, 'dist', 'heal.js'));
+const { xpathIdentity } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
 
 test('attribute-equality shapes on identity attributes extract token + tag', () => {
   assert.deepEqual(xpathIdentity("//a[@aria-label='Enable Prime mode']"),

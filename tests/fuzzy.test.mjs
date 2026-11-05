@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Issue 2: fuzzy matching for typo'd identifiers. Normalization strips
@@ -15,7 +15,7 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const {
   normalizeIdentifier, similarity, matchFuzzy, isGeneratedIdentifier,
   FUZZY_HEAL_THRESHOLD, FUZZY_NEAR_MISS_FLOOR,
-} = await import(path.join(repoRoot, 'dist', 'fuzzy.js'));
+} = await import(pathToFileURL(path.join(repoRoot, 'dist', 'fuzzy.js')).href);
 
 test('normalizeIdentifier strips separators and case', () => {
   assert.equal(normalizeIdentifier('Emai_l'), 'email');

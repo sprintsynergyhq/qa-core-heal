@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 0.2.1 item 2: tag-typo corrections for compound CSS selectors. The
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { tagTypoCorrections, closestKnownTag } = await import(path.join(repoRoot, 'dist', 'heal.js'));
+const { tagTypoCorrections, closestKnownTag } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'heal.js')).href);
 
 test('an invalid tag one edit from a real one is corrected, selector preserved', () => {
   assert.deepEqual(tagTypoCorrections('buttons.btn.btn-primary'), ['button.btn.btn-primary']);

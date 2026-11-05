@@ -20,6 +20,7 @@ import {
   matchFinding, realPathOf, resolveTarget, type RunObserver,
 } from './targeted.js';
 import { stripAnsi } from './run.js';
+import { displayPath } from './display-path.js';
 
 /**
  * The findings flow: read the handoff decisions of qa-core-flaky and write
@@ -479,17 +480,23 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     if (configArgFor(o.cwd, cfg, root) !== null) return;
     configNoted = true;
     const why = configIgnoreReason(o.cwd, cfg, root) ?? 'it is outside the project';
-    console.error(`[verbose] ignored configPath ${cfg}: ${why}`);
+    console.error(`[verbose] ignored configPath ${displayPath(cfg, o.cwd)}: ${why}`);
+  }
+
+  /** The patch path from the folder heal runs in, with this system's separators. */
+  function patchShown(patchFile: string): string {
+    return displayPath(path.resolve(path.dirname(o.resultsPath), patchFile), o.cwd);
   }
 
   noteIgnoredConfig(o.cwd);
 
   for (const f of doc.findings) {
-    say(`▸ ${f.findingId}  ${f.file} · ${f.titlePath.join(' › ')}  (handoff: ${f.handoff.mode})`);
+    say(`▸ ${f.findingId}  ${displayPath(f.file, o.cwd)} · ${f.titlePath.join(' › ')}  (handoff: ${f.handoff.mode})`);
     const entry = await processFinding(f);
     entries.push(entry);
     const tag = entry.status === 'refused' && entry.refusal ? `refused (${entry.refusal.code})` : entry.status;
     say(`  ${tag}: ${entry.explanation}`);
+    if (entry.patchFile) say(`  patch: ${patchShown(entry.patchFile)}`);
   }
 
   /** Each finding gets its own Playwright output folders, removed afterwards, so runs at the same time do not clear each other's files. */
@@ -693,7 +700,7 @@ export async function runFindingsFlow(o: FindingsFlowOptions): Promise<FindingsF
     // 5. Apply only on request.
     if (!o.apply) return entry;
     say(`  proposed change${changes.length === 1 ? '' : 's'}:`);
-    for (const c of changes) { say(`    ${c.file}:${c.startLine}`); say(`      - ${c.before}`); say(`      + ${c.after}`); }
+    for (const c of changes) { say(`    ${displayPath(c.file, o.cwd)}:${c.startLine}`); say(`      - ${c.before}`); say(`      + ${c.after}`); }
     if (!(await o.confirm())) {
       say('  not applied: consent was not given.');
       return entry;

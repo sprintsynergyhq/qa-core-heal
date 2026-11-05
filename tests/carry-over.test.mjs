@@ -36,8 +36,21 @@ test('absolute in-project paths and paths with .. are refused as outside', async
   } finally { rm(dir); }
 });
 
-test('--test reports a timeout during the re-run and restores the spec', { timeout: 90000 }, async () => {
+test('--test reports a timeout during the re-run and restores the spec', {
+  // Under a full Windows suite Chromium startup for the first discovery run
+  // alone can burn past 20s, so the node:test budget must cover the larger
+  // --run-timeout used below.
+  timeout: process.platform === 'win32' ? 180000 : 90000,
+}, async () => {
   const server = await startServer('<html><body><label>Mail <input type="email" name="email" id="mail-x9" /></label></body></html>');
+  // --run-timeout is one shared budget for list + first discovery + verify
+  // re-run. On an idle machine the first run fails in a few seconds, then the
+  // re-run hangs and the budget fires there. Under a full Windows suite the
+  // first Chromium launch can exceed 20s, so the budget never reaches the
+  // re-run and the assertion fails. Windows gets a larger budget; the hang
+  // always outlasts whatever remains, so the timeout still lands in the re-run.
+  const runTimeoutSec = process.platform === 'win32' ? 90 : 20;
+  const hangMs = (runTimeoutSec + 30) * 1000;
   const dir = makeProject(baseOf(server), {
     'tests/a.spec.ts': `import { test } from '@playwright/test';
 import fs from 'node:fs';
@@ -46,14 +59,14 @@ test('fills mail', async ({ page }) => {
   fs.writeFileSync('count', String(n));
   await page.goto('/');
   if (n === 1) await page.locator('#email-7d21ac').fill('a@b.dev');
-  else await new Promise((r) => setTimeout(r, 60000));
+  else await new Promise((r) => setTimeout(r, ${hangMs}));
 });
 `,
-  }, { timeout: 90000 });
+  }, { timeout: hangMs + 30000 });
   const spec = path.join(dir, 'tests/a.spec.ts');
   const original = fs.readFileSync(spec, 'utf8');
   try {
-    const r = await runCli(['tests/a.spec.ts', '--test', 'fills mail', '--yes', '--run-timeout', '20'], dir);
+    const r = await runCli(['tests/a.spec.ts', '--test', 'fills mail', '--yes', '--run-timeout', String(runTimeoutSec)], dir);
     assert.equal(r.status, 1, `${r.stdout}\n${r.stderr}`);
     assert.match(`${r.stdout}\n${r.stderr}`, /The run timeout was reached during the re-run, so the heal was reverted/);
     assert.doesNotMatch(`${r.stdout}\n${r.stderr}`, /re-run still failing after heal/);

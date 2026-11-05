@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Bug 3: element-kind guard. The kind the original selector implies (id /
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const { kindsFromTokens, kindsFromTrailingApi, kindOfElement, kindConflict } = await import(
-  path.join(repoRoot, 'dist', 'kind.js')
+  pathToFileURL(path.join(repoRoot, 'dist', 'kind.js')).href
 );
 
 test('selector tokens imply an expected kind', () => {

@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { fileInRoot } = await import(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'index.js'));
+const { fileInRoot } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'index.js')).href);
+const { toCliFileFilter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'playwright-cli.js')).href);
 
 test('fileInRoot keeps an absolute spec that is already inside the root', () => {
   const root = path.join(repoRoot, 'space dir');
@@ -38,7 +39,7 @@ test('fileInRoot normalises a specRel that starts with ./', () => {
 });
 
 test('scratch run with a space, a nested directory, and a ./ specRel runs the copied spec', { timeout: 60000 }, async () => {
-  const { scratchVerify } = await import(path.join(repoRoot, 'dist', 'scratch.js'));
+  const { scratchVerify } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'scratch.js')).href);
   const parent = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
   const dir = path.join(parent, 'space dir');
   const specRel = './tests/nested dir/a.spec.ts';
@@ -74,7 +75,10 @@ test('passes', async () => { throw new Error('ORIGINAL'); });
     });
     assert.equal(out.state, 'passed', out.message);
     assert.equal(commands.length, 1);
-    assert.match(commands[0], /tests\/nested dir\/a\\\.spec\\\.ts:2/);
+    // On Linux the filter is tests/nested dir/a\.spec\.ts. On Windows the space also accepts %20,
+    // because Playwright matches the filter against the spec's file URL there.
+    assert.ok(commands[0].includes(`${toCliFileFilter('tests/nested dir/a.spec.ts')}:2`), commands[0]);
+    if (process.platform !== 'win32') assert.match(commands[0], /tests\/nested dir\/a\\\.spec\\\.ts:2/);
     assert.equal(commands[0].includes(specPath), false);
     assert.equal(fs.readFileSync(specPath, 'utf8'), src);
   } finally {

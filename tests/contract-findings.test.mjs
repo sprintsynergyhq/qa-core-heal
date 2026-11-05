@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   assertValid, baseOf, finding, findingsDoc, makeProject, pkg, readJsonFile, rm, runCli, startServer,
@@ -68,6 +69,11 @@ async function runFindings(s, findings, extra = ['--dry-run'], { baseUrl = baseO
   if (results) assertValid(validateResults, results, 'results file');
   return { r, results, findingsPath, resultsPath };
 }
+
+// Windows needs Developer Mode or admin rights to create a symbolic link.
+const WIN_SYMLINK_SKIP = process.platform === 'win32' ? 'symlinks need Developer Mode on Windows' : false;
+// The patch check uses git apply. A tester machine may not have git on the PATH.
+const HAS_GIT = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
 
 const only = (results) => {
   assert.equal(results.results.length, 1);
@@ -174,6 +180,7 @@ test('refusal ineligible-handoff: a handoff of none is refused and no test runs'
     assert.equal(e.verification.outcome, 'not-run');
     assert.deepEqual(e.changes, []);
     assert.equal(e.patchFile, null);
+    assert.doesNotMatch(r.stdout, /^\s*patch:/m, 'a refusal has no patch line');
     assert.deepEqual(countOf(s.counter), [], 'no test may run');
     assert.equal(s.spec().includes('#email-7d21ac'), true);
   } finally { s.done(); }
@@ -200,9 +207,24 @@ test('refusal ineligible-handoff: heal does not trust the mode alone', async () 
   } finally { s.done(); }
 });
 
+test('--ascii prints the findings report with plain ASCII symbols (Windows tester report, 2026-11-03)', async () => {
+  const s = await setup(HEALABLE_BODY);
+  try {
+    const f = finding({ mode: 'none', verdict: 'likely-real-bug', primaryRuleId: 'ASSERT-REAL' });
+    const uni = await runFindings(s, [f]);
+    assert.match(uni.r.stdout, /^▸ /m);
+    assert.match(uni.r.stdout, / · /);
+    const { r } = await runFindings(s, [f], ['--dry-run', '--ascii']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /[▸›·→✓✗…—–]/);
+    assert.match(r.stdout, new RegExp(`^> ${f.findingId} `, 'm'));
+    assert.match(r.stdout, /^> Wrote heal-results\.json: 0 proposed - 0 applied - 1 refused/m);
+  } finally { s.done(); }
+});
+
 /* ───────────────────────── the proposal path ───────────────────────── */
 
-test('a locator handoff gives a verified proposal, writes no source file, and leaves no scratch copy', async () => {
+test('a locator handoff gives a verified proposal, writes no source file, and leaves no scratch copy', async (t) => {
   const body = `${HEALABLE_BODY}
 test('other one', async ({ page }) => { log('other one'); await page.goto('/'); });
 test('third one', async ({ page }) => { log('third one'); await page.goto('/'); });`;
@@ -242,11 +264,19 @@ test('third one', async ({ page }) => { log('third one'); await page.goto('/'); 
     // The patch file is a real unified diff that applies to the untouched spec.
     const patch = path.join(s.dir, e.patchFile);
     assert.equal(fs.existsSync(patch), true);
-    const check = spawnSync('git', ['apply', '--check', '-p1', patch], { cwd: s.dir, encoding: 'utf8' });
-    assert.equal(check.status, 0, check.stderr);
-    spawnSync('git', ['apply', '-p1', patch], { cwd: s.dir });
-    assert.equal(s.spec().includes(e.changes[0].after), true);
-    assert.equal(s.spec().includes('#email-7d21ac'), false);
+    // The console names the patch relative to the folder heal ran in (Windows tester report, 2026-11-03).
+    const shown = path.join('.qa-core', 'heal', 'patches', `${f.findingId}.diff`);
+    assert.equal(e.patchFile, `.qa-core/heal/patches/${f.findingId}.diff`);
+    assert.ok(r.stdout.split(/\r?\n/).includes(`  patch: ${shown}`), r.stdout);
+    if (!HAS_GIT) {
+      t.diagnostic('git is not on the PATH, so the git apply check of the patch was not run');
+    } else {
+      const check = spawnSync('git', ['apply', '--check', '-p1', patch], { cwd: s.dir, encoding: 'utf8' });
+      assert.equal(check.status, 0, check.stderr);
+      spawnSync('git', ['apply', '-p1', patch], { cwd: s.dir });
+      assert.equal(s.spec().includes(e.changes[0].after), true);
+      assert.equal(s.spec().includes('#email-7d21ac'), false);
+    }
   } finally { s.done(); }
 });
 
@@ -498,7 +528,7 @@ test('refusal spec-not-found: a missing file, a missing test, and a path outside
   } finally { s.done(); }
 });
 
-test('a symlink that points outside the project says symlink', async () => {
+test('a symlink that points outside the project says symlink', { skip: WIN_SYMLINK_SKIP }, async () => {
   const s = await setup(HEALABLE_BODY);
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-core-heal-out-spec-'));
   fs.writeFileSync(path.join(outside, 'x.spec.ts'), 'export {};\n');
@@ -587,13 +617,13 @@ test('a findings title path that starts with the project name still finds the te
 });
 
 test('every refusal code in the schema is a code this build knows', async () => {
-  const schema = readJsonFile(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'schemas', 'heal-results.v1.schema.json'));
+  const schema = readJsonFile(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'schemas', 'heal-results.v1.schema.json'));
   const text = JSON.stringify(schema);
   const codes = ['ambiguous-match', 'element-changed', 'strict-needs-human', 'possible-real-bug', 'weakens-test',
     'verification-failed', 'baseline-not-reproduced', 'no-safe-pattern', 'ai-disabled', 'ai-invalid-output',
     'ineligible-handoff', 'navigation-or-network', 'spec-not-found', 'timeout'];
   for (const c of codes) assert.equal(text.includes(`"${c}"`), true, c);
-  const { REFUSAL_CODES } = await import(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dist', 'contract.js'));
+  const { REFUSAL_CODES } = await import(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'contract.js')).href);
   assert.deepEqual([...REFUSAL_CODES].sort(), [...codes].sort());
 });
 
@@ -607,7 +637,8 @@ test('the default is three shadow runs and every one must pass', async () => {
     assert.equal(e.verification.runs, 3);
     assert.equal(e.verification.passed, 3);
     assert.equal(e.verification.failed, 0);
-    const scratch = r.stderr.split('\n').filter((l) => l.startsWith('[verbose] child:') && /--output \S+\/scratch(?:\s|$)/.test(l));
+    // The --output folder uses the platform separator (a backslash on Windows).
+    const scratch = r.stderr.split('\n').filter((l) => l.startsWith('[verbose] child:') && /--output \S+[\\/]scratch(?:\s|$)/.test(l));
     assert.equal(scratch.length, 3, r.stderr);
     assert.equal(countOf(s.counter).length, 4);
   } finally { s.done(); }
@@ -663,7 +694,7 @@ test('heal.shadowRuns must be a positive integer', async () => {
   } finally { s.done(); }
 });
 
-test('a spec symlink inside the project is refused and the message says it is a symbolic link', async () => {
+test('a spec symlink inside the project is refused and the message says it is a symbolic link', { skip: WIN_SYMLINK_SKIP }, async () => {
   const s = await setup(HEALABLE_BODY);
   try {
     fs.symlinkSync('a.spec.ts', path.join(s.dir, 'tests/link.spec.ts'));

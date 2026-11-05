@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Bug 1: base URL resolution. The CLI must read use.baseURL by actually
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const { resolvePlaywrightBaseUrl, findPlaywrightConfig } = await import(
-  path.join(repoRoot, 'dist', 'playwright-config.js')
+  pathToFileURL(path.join(repoRoot, 'dist', 'playwright-config.js')).href
 );
 
 function tempProject(files) {

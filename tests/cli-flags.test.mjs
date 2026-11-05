@@ -242,7 +242,9 @@ test('--json: a forced run failure emits valid JSON with the failure story', asy
     assert.equal(payload.schemaVersion, 1);
     assert.match(payload.error, /Could not run the Playwright tests/);
     assert.match(payload.error, /command: npx playwright test/);
-    assert.match(payload.error, /ENOENT/);
+    // On Windows npx runs through cmd.exe, which starts and then exits with
+    // "'npx' is not recognized", so the cause is an exit status, not ENOENT.
+    assert.match(payload.error, process.platform === 'win32' ? /exit status [1-9]\d*/ : /ENOENT/);
     assert.deepEqual(payload.verdicts, []);
     assert.equal(payload.summary.errors, 1);
   } finally {

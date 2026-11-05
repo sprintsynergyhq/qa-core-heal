@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { finding } from './helpers/contract.mjs';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { weakeningReason } = await import(path.join(repoRoot, 'dist', 'weaken.js'));
-const { scratchVerify } = await import(path.join(repoRoot, 'dist', 'scratch.js'));
-const { scratchStopEntry } = await import(path.join(repoRoot, 'dist', 'findings-flow.js'));
+const { weakeningReason } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'weaken.js')).href);
+const { scratchVerify } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'scratch.js')).href);
+const { scratchStopEntry } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'findings-flow.js')).href);
 
 test('a locator-only rewrite is not a weakening, and a looser or missing assertion is', () => {
   assert.equal(

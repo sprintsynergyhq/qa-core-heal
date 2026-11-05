@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, 'fixtures', 'cypress-saucedemo-style');
@@ -45,7 +45,7 @@ export async function runCypressFixture({ repoRoot, cli, cypressPkg }) {
     }
     if (row.status !== item.expect) failures.push(`${item.name}: ${row.status} ${JSON.stringify(row)}`);
     if (item.code) {
-      const { refusalFromReason } = await import(path.join(repoRoot, 'dist', 'findings-flow.js'));
+      const { refusalFromReason } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'findings-flow.js')).href);
       const code = refusalFromReason(row.reason ?? '', row.ambiguous === true);
       if (code !== item.code) failures.push(`${item.name}: refusal ${code}, expected ${item.code}`);
     }

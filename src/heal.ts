@@ -14,6 +14,7 @@ import { applyQuoteStyle } from './quotes.js';
 import { kindsFromTokens, kindsFromTrailingApi, kindOfElement, kindConflict, type ElementKind } from './kind.js';
 import { matchFuzzy, isGeneratedIdentifier, type FuzzyCandidate } from './fuzzy.js';
 import { loadAuthSetup, withTimeout } from './auth-setup.js';
+import { displayMessage, displayPath } from './display-path.js';
 
 /**
  * Standalone selector healing for an existing Playwright spec.
@@ -1482,8 +1483,9 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
   const relSpec = (p: string): string => path.relative(process.cwd(), p).split(path.sep).join('/');
   const fileError = (operation: string, p: string, spec: string, e: unknown): void => {
     const message = e instanceof Error ? e.message : String(e);
+    // The full message stays in fileErrors and the JSON. The console copy hides the home folder.
     fileErrors.push({ operation, path: p, spec: relSpec(spec), message });
-    console.error(`file error: ${operation} ${p} failed while processing spec ${relSpec(spec)}: ${message}; skipping`);
+    console.error(`file error: ${operation} ${displayPath(p)} failed while processing spec ${displayPath(spec)}: ${displayMessage(message, p)}; skipping`);
   };
   const files: SourceFile[] = [];
   const seenFiles = new Set<string>();
@@ -1549,7 +1551,8 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
     const skipped = templateGotos(f.src);
     if (skipped.length === 0) continue;
     templateSkippedFiles.add(f.path);
-    const rel = path.relative(process.cwd(), f.path).split(path.sep).join('/') || f.path;
+    // Console only: relative to the working folder, or <home>, with `/` as before.
+    const rel = displayPath(f.path).split(path.sep).join('/');
     for (const g of skipped) console.error(templateRouteSkipLine(rel, g.line, g.raw));
   }
 
@@ -1758,7 +1761,7 @@ export async function heal(opts: HealOptions): Promise<HealResult> {
     }
     if (detected) {
       storageState = detected;
-      console.error(`using storage state from ${detected}`);
+      console.error(`using storage state from ${displayPath(detected)}`);
     }
   }
   // A saved session is used FIRST when present: it is fast and runs no

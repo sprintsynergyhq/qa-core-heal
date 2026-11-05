@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 0.2.2: cross-platform Playwright child runs. The internal run must not
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { runPlaywrightCli, describeFailedRun, toCliFileFilter, startRunBudget } = await import(path.join(repoRoot, 'dist', 'playwright-cli.js'));
+const { runPlaywrightCli, describeFailedRun, toCliFileFilter, startRunBudget } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'playwright-cli.js')).href);
 
 test('the local @playwright/test CLI is resolved and run directly — no npx, no shell', async () => {
   // The direct path must NEVER print the npx-fallback note.
@@ -77,8 +77,46 @@ test('toCliFileFilter: win32 paths become forward-slash, regex-safe filters', ()
   // POSIX paths pass through with only regex specials escaped.
   assert.equal(toCliFileFilter('tests/sub/c.spec.ts'), 'tests/sub/c\\.spec\\.ts');
   // Regex-significant path characters (Next.js-style dirs) are escaped.
-  assert.equal(toCliFileFilter('tests/[id]/a.spec.ts'), 'tests/\\[id\\]/a\\.spec\\.ts');
-  assert.equal(toCliFileFilter('tests/(group)/b.spec.ts'), 'tests/\\(group\\)/b\\.spec\\.ts');
+  assert.equal(toCliFileFilter('tests/[id]/a.spec.ts', 'linux'), 'tests/\\[id\\]/a\\.spec\\.ts');
+  assert.equal(toCliFileFilter('tests/(group)/b.spec.ts', 'linux'), 'tests/\\(group\\)/b\\.spec\\.ts');
+  // On Windows a character the file URL percent-encodes also accepts the encoded form.
+  assert.equal(toCliFileFilter('tests/[id]/a.spec.ts', 'win32'), 'tests/(?:\\[|%5B)id(?:\\]|%5D)/a\\.spec\\.ts');
+  assert.equal(toCliFileFilter('tests\\nested dir\\a.spec.ts', 'win32'), 'tests/nested(?: |%20)dir/a\\.spec\\.ts');
+  assert.equal(toCliFileFilter('tests/(group)/b.spec.ts', 'win32'), 'tests/\\(group\\)/b\\.spec\\.ts');
+});
+
+// Playwright's file matcher on Windows (createFileMatcher in
+// playwright/lib/common): the regex is tried on the backslash path, then
+// on the file URL of the spec, where a space is %20 and [ ] are %5B %5D.
+function windowsPlaywrightMatches(filter, winFile) {
+  const re = new RegExp(filter, 'gi');
+  if (re.test(winFile)) return true;
+  re.lastIndex = 0;
+  return re.test(pathToFileURL(winFile, { windows: true }).href);
+}
+
+test('toCliFileFilter: on Windows the filter matches specs in folders with spaces, brackets and accents', () => {
+  const kit = 'C:\\Users\\zbob\\Desktop\\my kit';
+  const cases = [
+    ['tests\\nested dir\\a.spec.ts', true],
+    ['tests\\[id]\\a.spec.ts', true],
+    ['tests\\caf\u00e9\\c.spec.ts', true],
+    ['tests\\100% done\\d.spec.ts', true],
+    ['tests\\a#b\\e.spec.ts', true],
+    ['tests\\(group)\\b.spec.ts', false],
+    ['tests\\systematic\\1-dynamic-ids.spec.js', false],
+  ];
+  for (const [rel, encoded] of cases) {
+    const file = `${kit}\\${rel}`;
+    const filter = toCliFileFilter(rel, 'win32');
+    assert.equal(windowsPlaywrightMatches(filter, file), true, `${rel}: ${filter}`);
+    // The plain escaped filter (the 0.7.1 form) misses exactly the specs whose URL is encoded.
+    assert.equal(windowsPlaywrightMatches(toCliFileFilter(rel, 'linux'), file), !encoded, rel);
+    // A sibling file in the same folder is not matched.
+    assert.equal(windowsPlaywrightMatches(filter, file.replace(/\.spec\./, '-other.spec.')), false, rel);
+    // The Windows form still matches the plain path, so it is safe on any platform.
+    assert.equal(new RegExp(filter, 'gi').test(`/home/zbob/kit/${rel.replaceAll('\\', '/')}`), true, rel);
+  }
 });
 
 test('bracket and paren dirs match through the escaped filter (raw filters match nothing)', async () => {
@@ -135,7 +173,10 @@ test('a forced spawn failure surfaces command + error code through the CLI', () 
     const out = (run.stderr ?? '') + (run.stdout ?? '');
     assert.ok(out.includes('Could not run the Playwright tests'), out);
     assert.ok(out.includes('command: npx playwright test'), out);
-    assert.ok(out.includes('ENOENT'), out);
+    // On Windows npx runs through cmd.exe, which starts and then exits with
+    // "'npx' is not recognized", so the cause is an exit status, not ENOENT.
+    if (process.platform === 'win32') assert.match(out, /exit status [1-9]\d*/, out);
+    else assert.ok(out.includes('ENOENT'), out);
     // The fallback path announces itself, exactly once.
     assert.ok(out.includes('using npx fallback: local Playwright CLI not resolved'), out);
     assert.equal(out.split('using npx fallback').length - 1, 1, out);
@@ -160,7 +201,7 @@ test('a run budget is shared, and a spent budget does not start another child', 
 });
 
 test('each scratch run samples the timeout again', { timeout: 60000 }, async () => {
-  const { scratchVerify } = await import(path.join(repoRoot, 'dist', 'scratch.js'));
+  const { scratchVerify } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'scratch.js')).href);
   const dir = fs.mkdtempSync(path.join(repoRoot, '.tmp-test-'));
   try {
     fs.mkdirSync(path.join(dir, 'tests'));

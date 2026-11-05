@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const { resolveTarget } = await import(path.join(repoRoot, 'dist', 'targeted.js'));
-const { registerAdapter, unregisterAdapter, useAdapter } = await import(path.join(repoRoot, 'dist', 'adapters', 'index.js'));
-const { setPlaywrightSpawnObserver } = await import(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'cli.js'));
-const { detectFramework } = await import(path.join(repoRoot, 'dist', 'adapters', 'detect.js'));
+const { resolveTarget } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'targeted.js')).href);
+const { registerAdapter, unregisterAdapter, useAdapter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'index.js')).href);
+const { setPlaywrightSpawnObserver } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'playwright-js', 'cli.js')).href);
+const { detectFramework } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'detect.js')).href);
 
 test('resolveTarget uses the active adapter and does not spawn Playwright', async () => {
   const cliSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli.ts'), 'utf8');

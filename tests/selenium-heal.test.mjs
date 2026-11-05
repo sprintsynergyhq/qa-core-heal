@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cli = path.join(repoRoot, 'dist', 'cli.js');
@@ -18,12 +18,12 @@ const seleniumRoot = dependencyDir('selenium-webdriver');
 const mochaRoot = dependencyDir('mocha');
 const canRun = live && Boolean(seleniumRoot) && Boolean(mochaRoot);
 
-const { classifySeleniumFailure, byFromSentSelector } = await import(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'classify.js'));
-const { parseSeleniumCalls, hasRemoteSession } = await import(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'parse.js'));
-const { compareVersions } = await import(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'version.js'));
-const { seleniumMatchIds } = await import(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'unique.js'));
-const { grepPatternFor, listMochaTests } = await import(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'list-tests.js'));
-const { hookFailureText } = await import(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'report.js'));
+const { classifySeleniumFailure, byFromSentSelector } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'classify.js')).href);
+const { parseSeleniumCalls, hasRemoteSession } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'parse.js')).href);
+const { compareVersions } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'version.js')).href);
+const { seleniumMatchIds } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'unique.js')).href);
+const { grepPatternFor, listMochaTests } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'list-tests.js')).href);
+const { hookFailureText } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'selenium-js', 'report.js')).href);
 
 test('a brace or an escaped quote in a title does not move the suite', () => {
   const braced = "describe('login', () => {\n  const css = '}';\n  it('stays', () => {});\n});\n";
@@ -196,7 +196,7 @@ test('a mistyped test id next to By.id does not hang', { skip: canRun ? false : 
 });
 
 test('confirmSameElement finishes when the page has JavaScript disabled', async () => {
-  const { getAdapter } = await import(path.join(repoRoot, 'dist', 'adapters', 'index.js'));
+  const { getAdapter } = await import(pathToFileURL(path.join(repoRoot, 'dist', 'adapters', 'index.js')).href);
   const seleniumJs = getAdapter('selenium-js');
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless: true });
@@ -216,7 +216,7 @@ test('confirmSameElement finishes when the page has JavaScript disabled', async 
 });
 
 test('selenium eval cases heal or refuse as specified', { skip: canRun ? false : 'set QA_CORE_HEAL_SELENIUM=1 with selenium-webdriver and mocha installed', timeout: 300000 }, async () => {
-  const { runSeleniumFixture } = await import(path.join(repoRoot, 'evals', 'run-selenium-evals.mjs'));
+  const { runSeleniumFixture } = await import(pathToFileURL(path.join(repoRoot, 'evals', 'run-selenium-evals.mjs')).href);
   const outcome = await runSeleniumFixture({
     repoRoot,
     cli,

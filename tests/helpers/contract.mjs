@@ -63,7 +63,12 @@ export default defineConfig({
   return dir;
 }
 
-export const rm = (dir) => fs.rmSync(dir, { recursive: true, force: true });
+/**
+ * Removes a test folder. On Windows a browser or Playwright worker that was
+ * just stopped can hold the folder for a moment, and rmSync then fails with
+ * EPERM or EBUSY. Node retries those errors when maxRetries is set.
+ */
+export const rm = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 
 /** A findings document with the given findings, valid against contract v1. */
 export function findingsDoc(findings, baseUrl = null, configPath = 'playwright.config.ts') {
