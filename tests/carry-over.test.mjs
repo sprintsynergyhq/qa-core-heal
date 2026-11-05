@@ -49,7 +49,7 @@ test('--test reports a timeout during the re-run and restores the spec', {
   // first Chromium launch can exceed 20s, so the budget never reaches the
   // re-run and the assertion fails. Windows gets a larger budget; the hang
   // always outlasts whatever remains, so the timeout still lands in the re-run.
-  const runTimeoutSec = process.platform === 'win32' ? 60 : 20;
+  const runTimeoutSec = process.platform === 'win32' ? 90 : 20;
   const hangMs = (runTimeoutSec + 30) * 1000;
   const dir = makeProject(baseOf(server), {
     'tests/a.spec.ts': `import { test } from '@playwright/test';
